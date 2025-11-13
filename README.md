@@ -47,6 +47,7 @@ Tech Stack Overview
 * Database: PostgreSQL for reliable and structured data storage.
 * Authentication: JWT with bcrypt to ensure secure user sessions.
 * Real-Time Monitoring: Socket.io for live test monitoring and tab-switch detection.
+* Orm : Prisma (for clean schema + easy querying)
 
 ---
 
