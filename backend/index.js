@@ -2,7 +2,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import prisma from './lib/prisma.js';
+import authRoutes from './routes/auth.routes.js';
 
 // Initialize dotenv to load .env variables
 dotenv.config();
@@ -11,8 +12,6 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 8000;
 
-// Initialize Prisma Client
-const prisma = new PrismaClient();
 
 // --- Middleware ---
 // Enable CORS for all routes
@@ -22,17 +21,34 @@ app.use(express.json());
 
 // --- API Routes ---
 
+// Default (home)
+app.get("/", (req, res) => {
+  res.send("API is working!");
+});
+
+// Plug in the auth routes
+// All routes in 'authRoutes' will be prefixed with /api/auth
+app.use('/api/auth', authRoutes);
+
 // Simple test route
 app.get('/api/test', (req, res) =>{
     res.json({ message: 'Hello from the backend API'});
 });
 
-// GET all users
+// GET all users (Good for testing)
 // This is an async function because database queries take time
 app.get('/api/users', async (req, res) =>{
     try{
     // Use Prisma to find all users in the database
-    const users = await prisma.user.findMany();
+    const users = await prisma.user.findMany({
+      // Don't send back passwords!
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
     // Send the list of users as a JSON response
     res.json(users);
     } catch (error) {
