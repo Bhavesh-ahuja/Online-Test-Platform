@@ -27,4 +27,36 @@ model User {
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relation: One user can create many tests
+  tests     Test[]
+}
+
+// Defines the Test table
+model Test {
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  duration    Int        // Duration in minutes
+  createdAt   DateTime   @default(now())
+  
+  // Relation: Test belongs to a User (Admin)
+  createdById Int
+  createdBy   User       @relation(fields: [createdById], references: [id])
+
+  // Relation: One test has many questions
+  questions   Question[]
+}
+
+// Defines the Question table
+model Question {
+  id            Int      @id @default(autoincrement())
+  text          String
+  type          String   // "MCQ" or "SHORT"
+  options       String[] // Array of options for MCQ
+  correctAnswer String?  // Optional for short answers
+  
+  // Relation: Question belongs to a Test
+  testId        Int
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
 }

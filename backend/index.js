@@ -3,7 +3,10 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import prisma from './lib/prisma.js';
+
+// Import routes
 import authRoutes from './routes/auth.routes.js';
+import testRoutes from './routes/test.routes.js';
 
 // Initialize dotenv to load .env variables
 dotenv.config();
@@ -26,13 +29,15 @@ app.get("/", (req, res) => {
   res.send("API is working!");
 });
 
-// Plug in the auth routes
 // All routes in 'authRoutes' will be prefixed with /api/auth
 app.use('/api/auth', authRoutes);
 
+// All routes in 'authRoutes' will be prefixed with /api/auth
+app.use('/api/tests', testRoutes);
+
 // Simple test route
 app.get('/api/test', (req, res) =>{
-    res.json({ message: 'Hello from the backend API'});
+    res.json({ message: 'Backend is running!' });
 });
 
 // GET all users (Good for testing)
