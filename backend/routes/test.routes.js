@@ -1,5 +1,5 @@
 import express from 'express';
-import { createTest, getAllTests } from '../controllers/test.controller.js';
+import { createTest, getAllTests, getTestById } from '../controllers/test.controller.js';
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -9,5 +9,8 @@ router.get('/', authenticateToken, getAllTests);
 
 // POST /api/tests -Only ADMINS can create tests
 router.post('/', authenticateToken, isAdmin, createTest);
+
+// GET /api/tests/:id - Get a single test
+router.get('/:id', authenticateToken, getTestById);
 
 export default router;

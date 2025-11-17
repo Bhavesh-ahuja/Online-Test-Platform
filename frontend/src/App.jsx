@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateTestPage from './pages/CreateTestPage';
+import TestPage from './pages/TestPage';
 
 function App() {
   return (
@@ -26,6 +27,9 @@ function App() {
             {/* Protected Routes */}
             <Route path="/dashboard" element={<DashboardPage />}/>
             <Route path="/create-test" element={<CreateTestPage />}/>
+
+            {/* Dynamic Routes */}
+            <Route path="/test/:id" element={<TestPage />}/>
           </Routes>
         </main>
       </div>

@@ -53,3 +53,34 @@ export const getAllTests = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch tests' });
     }
 };
+
+// Get a single test by its ID
+export const getTestById = async (req,res) => {
+    const { id } = req.params;  // Get ID from URL
+
+    try {
+        const test = await prisma.test.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                questions: {
+                    // IMPORTANT we do NoT send the correctAnswer to the student
+                    select: {
+                        id: true,
+                        text: true,
+                        type: true,
+                        options: true,
+                        // We intentionally leave out correctAnswer
+                    }
+                }
+            }
+        });
+
+        if(!test){
+            return res.status(404).json({ error: 'Test not found' });
+        }
+
+        res.json(test);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch test' });
+    }
+};
