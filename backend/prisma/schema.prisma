@@ -23,13 +23,14 @@ enum Role {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   // We will hash this later
+  password  String   
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relation: One user can create many tests
   tests     Test[]
+  submissions TestSubmission[] // A user can have many submissions
 }
 
 // Defines the Test table
@@ -43,9 +44,11 @@ model Test {
   // Relation: Test belongs to a User (Admin)
   createdById Int
   createdBy   User       @relation(fields: [createdById], references: [id])
-
-  // Relation: One test has many questions
+  
+  // Relation: One test has many questions & can have many submissions
   questions   Question[]
+  submissions TestSubmission[] 
+
 }
 
 // Defines the Question table
@@ -59,4 +62,30 @@ model Question {
   // Relation: Question belongs to a Test
   testId        Int
   test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers       Answer[]  // A question can have many answers
+}
+
+model TestSubmission {
+  id        Int      @id @default(autoincrement())
+  score     Int
+  createdAt DateTime @default(now())
+  
+  // Relations
+  studentId Int
+  student   User     @relation(fields: [studentId], references: [id])
+  testId    Int
+  test      Test     @relation(fields: [testId], references: [id])
+  answers   Answer[] // A submission is made up of many answers
+}
+
+model Answer {
+  id           Int    @id @default(autoincrement())
+  selectedAnswer String
+  isCorrect    Boolean
+  
+  // Relations
+  submissionId Int
+  submission   TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId   Int
+  question     Question       @relation(fields: [questionId], references: [id])
 }

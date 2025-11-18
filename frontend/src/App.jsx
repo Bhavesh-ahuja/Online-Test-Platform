@@ -11,6 +11,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateTestPage from './pages/CreateTestPage';
 import TestPage from './pages/TestPage';
+import ResultsPage from './pages/ResultsPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
 
             {/* Dynamic Routes */}
             <Route path="/test/:id" element={<TestPage />}/>
+            <Route path="results/:submissionId" element={<ResultsPage />} />
           </Routes>
         </main>
       </div>

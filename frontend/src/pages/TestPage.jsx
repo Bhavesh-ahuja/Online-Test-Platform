@@ -51,11 +51,31 @@ function TestPage() {
     }));
   };
 
-  // 3. Handle submission (for now, just log the answers)
-  const handleSubmit = () => {
-    console.log('Submitting answers:', answers);
-    alert('Test submitted! (Functionality in next step)');
-    // In Step 11, we will send this to the backend
+  // 3. Handle submission 
+  const handleSubmit = async () => {
+    const token = localStorage.getItem('token');
+    if(!token) return;
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/tests/${id}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ answers: answers })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to submit');
+
+      // Success! Navigate to the new results page
+      alert('Test submitted successfully!');
+      navigate(`/results/${data.submissionId}`);
+    } catch (err) {
+      setError(err.message);
+      alert('Error submitting test: ' + err.message);
+    }
   };
 
   if (loading) return <div className="text-center mt-10">Loading Test...</div>;
