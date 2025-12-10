@@ -6,6 +6,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 ---------------------------------------------------------*/
 const MAX_WARNINGS = 3; // Auto-submit after 3 tab switches
 
+
+// Fisher-Yates Shuffle Algorithm
+// Takes an array and returns a New shuffled array
+function shuffledArray(array) {
+  const shuffled = [...array];   //Create a copy
+  for (let i = shuffled.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];  //Swap
+  }
+  return shuffled
+}
 /* --------------------------------------------------------
    TimerDisplay Component
    - Converts seconds → MM:SS
@@ -78,7 +89,7 @@ function TestPage() {
   const [warnings, setWarnings] = useState(0);
 
   /* --------------------------------------------------------
-     1. Fetch test when component loads
+     1. Fetch & Shuffle test when component loads
   ---------------------------------------------------------*/
   useEffect(() => {
     const loadTest = async () => {
@@ -94,6 +105,12 @@ function TestPage() {
         if (!response.ok) throw new Error('Failed to fetch test');
 
         const data = await response.json();
+
+        // Shuffle Questions
+        if (data.questions && Array.isArray(data.questions)) {
+          data.questions = shuffledArray(data.questions);
+        }
+
         setTest(data);
         setTimeLeft(data.duration * 60);
       } catch (err) {
@@ -204,13 +221,13 @@ function TestPage() {
     document.addEventListener('contextmenu', blockContextMenu);
     document.addEventListener('copy', blockCopyCutPaste);
     document.addEventListener('cut', blockCopyCutPaste);
-    document.addEventListener('paste', blockContextMenu);
+    document.addEventListener('paste', blockCopyCutPaste);
 
     return () => {
       document.removeEventListener('contextmenu', blockContextMenu);
       document.removeEventListener('copy', blockCopyCutPaste);
       document.removeEventListener('cut', blockCopyCutPaste);
-      document.removeEventListener('paste', blockContextMenu);
+      document.removeEventListener('paste', blockCopyCutPaste);
     };
   }, []);
 
