@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function AdminResultsPage() {
   const { id } = useParams(); // Test ID
@@ -16,7 +17,7 @@ function AdminResultsPage() {
       if (!token) return navigate('/login');
 
       try {
-        const response = await fetch(`http://localhost:8000/api/tests/${id}/submissions`, {
+        const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submissions`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 

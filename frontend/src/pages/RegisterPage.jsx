@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ function RegisterPage() {
     setError(''); // Clear previous errors
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/register', {
+      const response = await fetch('${API_BASE_URL}/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
