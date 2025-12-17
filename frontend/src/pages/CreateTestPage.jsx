@@ -47,7 +47,7 @@ function CreateTestPage() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('${API_BASE_URL}/api/tests', {
+      const response = await fetch(`${API_BASE_URL}/api/tests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

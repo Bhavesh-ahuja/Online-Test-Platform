@@ -23,7 +23,7 @@ function DashboardPage() {
       }
 
       try {
-        const response = await fetch('${API_BASE_URL}/api/tests', {
+        const response = await fetch(`${API_BASE_URL}/api/tests`, {
           headers: {
             'Authorization': `Bearer ${token}` // Attach the ID badge
           }

@@ -1,7 +1,7 @@
 // frontend/src/config.js
 
 // 1. Put your Render Backend URL here
-const RENDER_URL = "https://your-backend-app.onrender.com"; 
+const RENDER_URL = "https://mind-saga-testing.onrender.com"; 
 
 // 2. Put your Local Backend URL here
 const LOCAL_URL = "http://localhost:8000";

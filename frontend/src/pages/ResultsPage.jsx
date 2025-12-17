@@ -43,7 +43,7 @@ function ResultsPage() {
 
   //   Helper to detemine tailwind classes
   const getAnswerClass = (answer, option) => {
-    const isSelected = answer.slectedAnswer === option;
+    const isSelected = answer.selectedAnswer === option;
     const isCorrect = answer.question.correctAnswer === option;
 
     if (isCorrect) {
