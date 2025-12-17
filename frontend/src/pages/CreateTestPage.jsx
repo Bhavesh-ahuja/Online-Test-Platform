@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
 
 function CreateTestPage() {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ function CreateTestPage() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('http://localhost:8000/api/tests', {
+      const response = await fetch(`${API_BASE_URL}/api/tests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

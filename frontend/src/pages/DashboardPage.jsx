@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function DashboardPage() {
   const [tests, setTests] = useState([]);
@@ -22,7 +23,7 @@ function DashboardPage() {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/api/tests', {
+        const response = await fetch(`${API_BASE_URL}/api/tests`, {
           headers: {
             'Authorization': `Bearer ${token}` // Attach the ID badge
           }

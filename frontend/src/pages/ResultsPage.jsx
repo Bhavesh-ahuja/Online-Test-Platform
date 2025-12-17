@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function ResultsPage() {
   const { submissionId } = useParams();
@@ -17,7 +18,7 @@ function ResultsPage() {
       }
 
       try {
-        const response = await fetch(`http://localhost:8000/api/tests/results/${submissionId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/tests/results/${submissionId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -42,7 +43,7 @@ function ResultsPage() {
 
   //   Helper to detemine tailwind classes
   const getAnswerClass = (answer, option) => {
-    const isSelected = answer.slectedAnswer === option;
+    const isSelected = answer.selectedAnswer === option;
     const isCorrect = answer.question.correctAnswer === option;
 
     if (isCorrect) {
