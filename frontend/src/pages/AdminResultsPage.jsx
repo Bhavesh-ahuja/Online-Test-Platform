@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 function AdminResultsPage() {
   const { id } = useParams(); // Test ID
@@ -51,6 +53,51 @@ function AdminResultsPage() {
     }
   };
 
+  // Generate Report PDF
+  const handleDownloadReport = () => {
+    const doc = new jsPDF();
+
+    // 1. Title
+    doc.setFontSize(18);
+    doc.text('Test Result Report', 14, 22);
+
+    doc.setFontSize(12);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+
+    // 2. Prepare Data for Table
+    // Columns: [Email, Score, Status, Date]
+    const tableData = sortedSubmissions.map(sub => [
+      sub.student.email,
+      sub.score,
+      sub.status,
+      new Date(sub.createdAt).toLocaleDateString() + ' ' + new Date(sub.createdAt).toLocaleTimeString()
+    ]);
+
+    // 3. Generate Table
+    autoTable(doc, {
+      startY: 40,
+      head: [['Student Email', 'Score', 'Status', 'Date Submitted']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [44, 62, 80] }, //Dark header
+      styles: { fontSize: 10 },
+      didParseCell: (data) => {
+        // Highlight Cheaters in Red in the PDF
+        if (data.section === 'body' && data.column.index === 2) {
+          if (data.cell.raw === 'TERMINATED') {
+            data.cell.styles.textColor = [255, 0, 0];  //Red
+            data.cell.styles.fontStyle = 'bold';
+          } else if (data.cell.raw === 'COMPLETED') {
+            data.cell.styles.textColor = [0, 128, 0]; // Green
+          }
+        }
+      }
+    });
+
+    // 4. Save
+    doc.save('Class_Report.pdf');
+  }
+
   if (loading) return <div className="text-center mt-10">Loading data...</div>;
   if (error) return <div className="text-center mt-10 text-red-500">{error}</div>;
 
@@ -58,10 +105,21 @@ function AdminResultsPage() {
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Test Results</h1>
-        <Link to="/dashboard" className="text-blue-600 hover:underline">Back to Dashboard</Link>
+        <div className="space-x-4">
+            <Link to="/dashboard" className="text-blue-600 hover:underline">Back to Dashboard</Link>
+        </div>
       </div>
 
-      <div className="mb-4 flex justify-end">
+      {/* Toolbar */}
+      <div className="mb-4 flex justify-between items-center bg-gray-50 p-4 rounded-lg shadow-sm">
+        
+        <button 
+            onClick={handleDownloadReport}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition flex items-center shadow"
+        >
+            <span className="mr-2">📄</span> Download Class Report
+        </button>
+
         <select 
           className="p-2 border rounded shadow-sm bg-white"
           value={sortOrder}
