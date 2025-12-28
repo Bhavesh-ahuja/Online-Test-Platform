@@ -1,48 +1,62 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
-function CreateTestPage() {
+function EditTestPage() {
+  const { id } = useParams();
   const navigate = useNavigate();
-
-  // State for Test Details
+  const [loading, setLoading] = useState(true);
+  
   const [testData, setTestData] = useState({
     title: '',
     description: '',
     duration: 30
   });
 
-  // State for Questions
-  const [questions, setQuestions] = useState([
-    { text: '', type: 'MCQ', options: ['', '', '', ''], correctAnswer: '' }
-  ]);
+  const [questions, setQuestions] = useState([]);
 
-  // Helper: Update Test Details
-  const handleTestChange = (e) => {
-    setTestData({ ...testData, [e.target.name]: e.target.value });
-  };
+  // Load existing data
+  useEffect(() => {
+    const fetchTest = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(`http://localhost:8000/api/tests/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch test');
+        const data = await response.json();
+        
+        setTestData({
+          title: data.title,
+          description: data.description || '',
+          duration: data.duration
+        });
+        setQuestions(data.questions);
+      } catch (err) {
+        alert(err.message);
+        navigate('/dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTest();
+  }, [id, navigate]);
 
-  // --- Question Management ---
+  // --- Handlers (Identical to CreateTestPage) ---
+  const handleTestChange = (e) => setTestData({ ...testData, [e.target.name]: e.target.value });
+
   const handleQuestionChange = (index, field, value) => {
     const newQuestions = [...questions];
     newQuestions[index][field] = value;
     setQuestions(newQuestions);
   };
 
-  const addQuestion = () => {
-    setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
-  };
+  const addQuestion = () => setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
 
   const removeQuestion = (index) => {
-    if (questions.length === 1) {
-      alert("Test must have at least one question.");
-      return;
-    }
-    const newQuestions = questions.filter((_, i) => i !== index);
-    setQuestions(newQuestions);
+    if (questions.length === 1) return alert("Test must have at least one question.");
+    setQuestions(questions.filter((_, i) => i !== index));
   };
 
-  // --- Option Management ---
   const handleOptionChange = (qIndex, oIndex, value) => {
     const newQuestions = [...questions];
     newQuestions[qIndex].options[oIndex] = value;
@@ -57,54 +71,45 @@ function CreateTestPage() {
 
   const removeOption = (qIndex, oIndex) => {
     const newQuestions = [...questions];
-    if (newQuestions[qIndex].options.length <= 2) {
-      alert("MCQ must have at least 2 options.");
-      return;
-    }
+    if (newQuestions[qIndex].options.length <= 2) return alert("MCQ must have at least 2 options.");
     newQuestions[qIndex].options.splice(oIndex, 1);
     setQuestions(newQuestions);
   };
 
-  // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
 
-    // Validation: Check for empty options
+    // Validation
     const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
-    if (invalidMCQ) {
-      alert("All MCQ questions must have at least 2 options.");
-      return;
-    }
+    if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
 
     try {
-      const response = await fetch('http://localhost:8000/api/tests', {
-        method: 'POST',
+      const response = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          ...testData,
-          questions: questions
-        })
+        body: JSON.stringify({ ...testData, questions })
       });
 
-      if (!response.ok) throw new Error('Failed to create test');
+      if (!response.ok) throw new Error('Failed to update test. Note: You cannot modify questions if students have already taken this test.');
 
-      alert('Test Created Successfully!');
+      alert('Test Updated Successfully!');
       navigate('/dashboard');
     } catch (error) {
       alert(error.message);
     }
   };
 
-return (
+  if (loading) return <div className="text-center mt-10">Loading...</div>;
+
+  return (
     <div className="container mx-auto p-6 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-6">Create New Test</h1>
+      <h1 className="text-3xl font-bold mb-6">Edit Test: {testData.title}</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Test Info */}
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
           <h2 className="text-xl font-semibold">Test Details</h2>
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
@@ -115,7 +120,6 @@ return (
           </div>
         </div>
 
-        {/* Questions */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Questions</h2>
           {questions.map((q, qIndex) => (
@@ -127,9 +131,8 @@ return (
               
               <input className="w-full p-2 border rounded mb-3" placeholder="Question Text" value={q.text} required onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)} />
 
-              {/* Options */}
               <div className="mb-3">
-                <p className="text-sm font-semibold mb-2">Options (Min 2)</p>
+                <p className="text-sm font-semibold mb-2">Options</p>
                 {q.options.map((opt, oIndex) => (
                   <div key={oIndex} className="flex gap-2 mb-2">
                     <input className="grow p-2 border rounded bg-gray-50" placeholder={`Option ${oIndex + 1}`} value={opt} required onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)} />
@@ -139,7 +142,6 @@ return (
                 <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline">+ Add Option</button>
               </div>
 
-              {/* Correct Answer */}
               <input className="w-full p-2 border rounded border-green-200 bg-green-50" placeholder="Correct Answer (Must match one option exactly)" value={q.correctAnswer} required onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
             </div>
           ))}
@@ -147,11 +149,11 @@ return (
 
         <div className="flex gap-4">
           <button type="button" onClick={addQuestion} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">+ Add Question</button>
-          <button type="submit" className="grow px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Test</button>
+          <button type="submit" className="grow px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update Test</button>
         </div>
       </form>
     </div>
   );
 }
 
-export default CreateTestPage;
+export default EditTestPage;
