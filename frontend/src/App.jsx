@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateTestPage from './pages/CreateTestPage';
+import EditTestPage from './pages/EditTestPage';
 import TestPage from './pages/TestPage';
 import ResultsPage from './pages/ResultsPage';
 // import MyResultsPage from './pages/MyResultsPage';
@@ -27,18 +28,18 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
-            {/* Protected Routes */}
-            <Route path="/dashboard" element={<DashboardPage />}/>
-            <Route path="/create-test" element={<CreateTestPage />}/>
+            {/* Admin-Only Routes (Protected Routes) */}
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/create-test" element={<CreateTestPage />} />
+            <Route path="/test/edit/:id" element={<EditTestPage />} />
+            <Route path="/tests/:id/admin-results" element={<AdminResultsPage />} />
 
-            {/* Dynamic Routes */}
-            <Route path="/test/:id" element={<TestPage />}/>
+            {/* Test Taking & Result Routes (Accessible to Logged-in Users) */}
+            <Route path="/test/:id" element={<TestPage />} />
             <Route path="results/:submissionId" element={<ResultsPage />} />
 
+            {/* User Result Routes */}
             {/* <Route path="/my-results" element={<MyResultsPage />} /> */}
-
-            <Route path="/tests/:id/admin-results" element={<AdminResultsPage />} /> 
-
           </Routes>
         </main>
       </div>

@@ -49,27 +49,37 @@ function DashboardPage() {
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">Available Tests</h1>
-
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tests.map((test) => (
-          <div key={test.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition border border-gray-200 flex flex-col ">
+          <div key={test.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition border border-gray-200 flex flex-col">
             <h2 className="text-xl font-bold text-gray-800">{test.title}</h2>
-            <p className="text-gray-600 mt-2 mb-4">{test.description}</p>
+            <p className="text-gray-600 mt-2 mb-4 grow">{test.description}</p>
             <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
               <span>⏱ {test.duration} mins</span>
               <span>❓ {test._count?.questions || 0} Questions</span>
             </div>
-            <Link to={`/test/${test.id}`} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center"> Take Test </Link>
-            {/* only if admin */}
-            {isAdmin && (
-              <Link to={`/tests/${test.id}/admin-results`} className="w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-900 transition text-center border border-gray-600">View Student Result</Link>
-            )}
+
+            <div className="flex flex-col gap-2">
+              <Link to={`/test/${test.id}`} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center">
+                Take Test
+              </Link>
+
+              {isAdmin && (
+                <div className="flex gap-2">
+                  <Link to={`/tests/${test.id}/admin-results`} className="flex-1 bg-gray-800 text-white py-2 rounded hover:bg-gray-900 transition text-center border border-gray-600">
+                    Results
+                  </Link>
+                  {/* --- NEW EDIT BUTTON IN STEP 18 --- */}
+                  <Link to={`/test/edit/${test.id}`} className="bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600 transition text-center">
+                    ✏️
+                  </Link>
+                </div>
+              )}
+            </div>
+
           </div>
         ))}
-
-        {tests.length === 0 && (
-          <p className="text-gray-500 col-span-3 text-center">No tests available yet.</p>
-        )}
+        {tests.length === 0 && <p className="text-gray-500 col-span-3 text-center">No tests available yet.</p>}
       </div>
     </div>
   );
