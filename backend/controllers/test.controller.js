@@ -269,3 +269,36 @@ export const updateTest = async (req, res) => {
     res.status(500).json({ error: 'Failed to update test' });
   }
 };
+
+export const deleteTest = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Check if test exists
+    const test = await prisma.test.findUnique({
+      where: { id: parseInt(id) },
+      include: { _count: { select: { submissions: true } } }
+    });
+
+    if (!test) return res.status(404).json({ error: "Test not found" });
+
+    // 2. Safety Check: Do not delete if student have taken it
+    if (test._count.submissions > 0) {
+      return req.status(400).json({
+        error: 'Cannot delete test because it has student submissions. Archiving is recommended instead.'
+      });
+    }
+
+    // 3. Delete (This will cascade delete Questions due to database rules, but lets be safe)
+    // We use a transaction to ensure clean deletion
+    await prisma.$transaction([
+      prisma.answer.deleteMany({ where: { question: { testId: parseInt(id) } } }),
+      prisma.question.deleteMany({ where: { testId: parseInt(id) } }),
+      prisma.test.delete({ where: { id: parseInt(id) } })
+    ]);
+  }
+  catch (error) {
+    console.error('Delete test error:', error);
+    res.status(500).json({ error: 'Failed to delete test' });
+  }
+};

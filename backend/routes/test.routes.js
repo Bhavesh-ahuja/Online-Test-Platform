@@ -7,7 +7,8 @@ import {
   getTestResult,
   getMySubmissions,
   getTestSubmissions,
-  updateTest
+  updateTest,
+  deleteTest
 } from '../controllers/test.controller.js';
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
 
@@ -36,5 +37,8 @@ router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
 
 // PUT /api/tests/:id - Admin only: Update an existing test
 router.put('/:id', authenticateToken, isAdmin, updateTest);
+
+// DELETE Test
+router.delete('/:id', authenticateToken, isAdmin, deleteTest);
 
 export default router;
