@@ -1,0 +1,1 @@
+curl "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyDC0NlAR5dcdEX64n-EuFTP2MfMfLtHnTc"
