@@ -38,7 +38,7 @@ router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
 // PUT /api/tests/:id - Admin only: Update an existing test
 router.put('/:id', authenticateToken, isAdmin, updateTest);
 
-// DELETE Test
+// DELETE /api/tests/:id - Admin only: Delete an existing test
 router.delete('/:id', authenticateToken, isAdmin, deleteTest);
 
 export default router;
