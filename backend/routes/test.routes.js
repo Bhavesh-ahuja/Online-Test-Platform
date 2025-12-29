@@ -8,11 +8,17 @@ import {
   getMySubmissions,
   getTestSubmissions,
   updateTest,
-  deleteTest
+  deleteTest,
+  uploadTestPDF
 } from '../controllers/test.controller.js';
+import multer from "multer";
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
+
+// --- MULTER CONFIGURATION (Memory Storage) ---
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // GET /api/tests - Anyone logged in can see all available tests
 router.get('/', authenticateToken, getAllTests);
@@ -38,7 +44,11 @@ router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
 // PUT /api/tests/:id - Admin only: Update an existing test
 router.put('/:id', authenticateToken, isAdmin, updateTest);
 
-// DELETE Test
+// DELETE /api/tests/:id - Admin only: Delete an existing test
 router.delete('/:id', authenticateToken, isAdmin, deleteTest);
+
+// POST /api/tests/upload-pdf
+router.post('/upload-pdf', authenticateToken, isAdmin, upload.single('file'), uploadTestPDF);
+
 
 export default router;
