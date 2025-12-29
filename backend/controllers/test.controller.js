@@ -1,4 +1,8 @@
+// test.controller.js
 import prisma from '../lib/prisma.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+
 
 // Create a new test with questions
 export const createTest = async (req, res) => {
@@ -102,15 +106,15 @@ export const submitTest = async (req, res) => {
     const answerRecords = [];
 
     for (const q of correctQuestions) {
-      const studnetAnswer = answers[q.id];
-      const isCorrect = studnetAnswer === q.correctAnswer;
+      const studentAnswer = answers[q.id];
+      const isCorrect = studentAnswer === q.correctAnswer;
 
       if (isCorrect) {
         score++;
       }
 
       answerRecords.push({
-        selectedAnswer: studnetAnswer || "No Answer",
+        selectedAnswer: studentAnswer || "No Answer",
         isCorrect: isCorrect,
         questionId: q.id
       });
@@ -238,9 +242,9 @@ export const updateTest = async (req, res) => {
         // because it would break their result history.
         // We will ignore the 'questions' update and warn the user (or just update metadata).
         // console.warn("Skipping question update due to existing submissions");
-        return {
-          warning: "This question cannot be updated because submissions already exist."
-        };
+        return res.status(400).json({
+          warning: "This test cannot be updated because submissions already exist."
+        });
       } else {
         // Safe to update questions: Delete all old ones, create new ones
         updateData.questions = {
@@ -284,7 +288,7 @@ export const deleteTest = async (req, res) => {
 
     // 2. Safety Check: Do not delete if student have taken it
     if (test._count.submissions > 0) {
-      return req.status(400).json({
+      return res.status(400).json({
         error: 'Cannot delete test because it has student submissions. Archiving is recommended instead.'
       });
     }
@@ -300,5 +304,93 @@ export const deleteTest = async (req, res) => {
   catch (error) {
     console.error('Delete test error:', error);
     res.status(500).json({ error: 'Failed to delete test' });
+  }
+};
+
+
+export const uploadTestPDF = async (req, res) => {
+  
+  try {
+    if (!req.file) return res.status(400).json({ error: "No PDF file uploaded" });
+
+
+    // 1.Extract Text from PDF using pdfjs-dist
+    // Convert Buffer to Unit8Array which pdfjs expects
+    const data = new Uint8Array(req.file.buffer);
+
+    // Load the document
+    const loadingTask = getDocument(data);
+    const pdfDocument = await loadingTask.promise;
+
+    let extractedText = "";
+
+    // Iterate through all pages
+    for (let i = 1; i <= pdfDocument.numPages; i++) {
+      const page = await pdfDocument.getPage(i);
+      const content = await page.getTextContent();
+      // Join all text items on the page with spaces
+      const pageText = content.items.map(item => item.str).join(" ");
+      extractedText += pageText + "\n";
+    }
+
+    if (!extractedText || extractedText.length < 50) {
+      return res.status(400).json({ error: "Could not extract enough text. Ensure this is a text-based PDF." });
+    }
+
+    // 2.Configure Gemini AI
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
+
+    
+
+    // 3. Prompt Engeneering
+    const prompt = `
+    You are an exam parser helper.
+    Read the following text extracted from a PDF.Identify all Multiple Choice Questions (MCQs).
+    
+    Your Goal: Convert the text into a strict JSON array.
+    
+    Rules:
+    1. Extract the "text" (questiosn).
+    2. Extract the "options" (array of strings).
+    3. If you can detect the correct answer (marked by *,bold,or an answer key), put it in "correctAnswer".
+       If you connot find the answer, leave "correctANswer" as an empty string "".
+    4. Dafault "type" to "MCQ".
+    5. Output ONLY valid JSON. No markdown.
+    
+    JSON Structure:
+    [
+      {
+        "text": "Question goes here?",
+        "type": "MCQ",
+        "options" : ["Option A","Option B","Option C","Option D",so on.......],
+        "correctAnswer": "Correct answer goes here"
+      }
+    ]
+      
+    Here is the PDF text:
+    ${extractedText}
+    `;
+
+    // 4. Generate Content
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // 5. Clean JSON (Remove markdown code blocks if AI adds them)
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    let questions;
+    try {
+      questions = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error("AI JSON Parse Error:", text);
+      return res.status(500).json({ error: "AI failed to format the questions correctly. Please try a cleaner PDF." });
+    }
+
+    res.json({ questions });
+  } catch (error) {
+    console.error("PDF Upload Error:", error);
+    res.status(500).json({ error: "Failed to process PDFDataRangeTransport." });
   }
 };
