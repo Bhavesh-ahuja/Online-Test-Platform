@@ -9,7 +9,8 @@ import {
   getTestSubmissions,
   updateTest,
   deleteTest,
-  uploadTestPDF
+  uploadTestPDF,
+  startTest,
 } from '../controllers/test.controller.js';
 import multer from "multer";
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
@@ -50,5 +51,5 @@ router.delete('/:id', authenticateToken, isAdmin, deleteTest);
 // POST /api/tests/upload-pdf
 router.post('/upload-pdf', authenticateToken, isAdmin, upload.single('file'), uploadTestPDF);
 
-
+router.post('/:id/start', authenticateToken, startTest);
 export default router;

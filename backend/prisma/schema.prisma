@@ -40,6 +40,10 @@ model Test {
   description String?
   duration    Int        // Duration in minutes
   createdAt   DateTime   @default(now())
+
+  // Scheduling
+  scheduledStart DateTime?  //Optional: If null, starts immediately
+  scheduledEnd   DateTime?  //Optional: If null, never expires
   
   // Relation: Test belongs to a User (Admin)
   createdById Int

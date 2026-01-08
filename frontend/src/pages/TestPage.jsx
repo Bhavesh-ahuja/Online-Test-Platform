@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 /* --------------------------------------------------------
    Global Constants & Helpers
@@ -30,8 +31,9 @@ function shuffleArray(array) {
 
 function TimerDisplay({ seconds }) {
   const formatTime = () => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
     const minStr = String(minutes).padStart(2, '0');
     const secStr = String(remainingSeconds).padStart(2, '0');
     return `${minStr}:${secStr}`;
@@ -61,7 +63,7 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
   const getButtonClass = (index) => {
     const questionId = index; // using index as ID for simplicity in palette mapping
     const isCurrent = index === currentQuestionIndex;
-    
+
     // Status Logic
     const isAnswered = answers[index] !== undefined; // Check if we have an answer for this index
     const isMarked = markedQuestions.includes(index);
@@ -70,14 +72,14 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
     let baseClass = "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
 
     if (isCurrent) {
-        return baseClass + "ring-2 ring-offset-2 ring-blue-500 border-blue-600 bg-blue-100 text-blue-800";
+      return baseClass + "ring-2 ring-offset-2 ring-blue-500 border-blue-600 bg-blue-100 text-blue-800";
     }
 
     if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white border-purple-700"; // Marked & Answered
     if (isMarked) return baseClass + "bg-purple-200 text-purple-800 border-purple-300"; // Marked for Review
     if (isAnswered) return baseClass + "bg-green-500 text-white border-green-600"; // Answered
     if (isVisited) return baseClass + "bg-red-100 text-red-800 border-red-300"; // Visited (Not Answered)
-    
+
     return baseClass + "bg-gray-100 text-gray-600 border-gray-300"; // Not Visited
   };
 
@@ -95,7 +97,7 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
           </button>
         ))}
       </div>
-      
+
       {/* Legend */}
       <div className="mt-6 text-xs space-y-2 text-gray-600 border-t pt-4">
         <div className="flex items-center"><div className="w-3 h-3 bg-green-500 mr-2 rounded"></div> Answered</div>
@@ -119,7 +121,7 @@ function TestPage() {
   const [test, setTest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [warnings, setWarnings] = useState(0);
@@ -133,27 +135,52 @@ function TestPage() {
 
   // --- 1. Fetch & Init ---
   useEffect(() => {
-    const loadTest = async () => {
+    const initTest = async () => {
       const token = localStorage.getItem('token');
       if (!token) return navigate('/login');
 
       try {
-        const response = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        // Step A: Fetch Test Content
+        const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!testRes.ok) throw new Error('Failed to fetch test data');
+        const data = await testRes.json();
 
-        if (response.status === 404) throw new Error('Test not found');
-        if (!response.ok) throw new Error('Failed to fetch test');
-
-        const data = await response.json();
-        
-        // Shuffle if needed
         if (data.questions && Array.isArray(data.questions)) {
           data.questions = shuffleArray(data.questions);
         }
-
         setTest(data);
-        setTimeLeft(data.duration * 60);
+
+        // Step B: Start/Resume Test Session (Get Start Time & Verify Schedule)
+        const startRes = await fetch(`http://localhost:8000/api/tests/${id}/start`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!startRes.ok) {
+          const errData = await startRes.json();
+
+          // Handle Schedule/Security Errors
+          if (startRes.status === 403) {
+            alert(errData.error || "Access denied.");
+            navigate('/dashboard');
+            return;
+          }
+          throw new Error(errData.error || 'Failed to start test session');
+        }
+
+        const sessionData = await startRes.json();
+
+        // Step C: Calculate Remaining Time based on SERVER start time
+        const startTime = new Date(sessionData.startTime).getTime();
+        const durationInMs = data.duration * 60 * 1000;
+        const endTime = startTime + durationInMs;
+        const now = new Date().getTime();
+
+        const secondsRemaining = (endTime - now) / 1000;
+        setTimeLeft(secondsRemaining);
+
       } catch (err) {
         setError(err.message);
       } finally {
@@ -161,7 +188,7 @@ function TestPage() {
       }
     };
 
-    loadTest();
+    initTest();
   }, [id, navigate]);
 
   // --- 2. Navigation Handlers ---
@@ -210,11 +237,11 @@ function TestPage() {
   const handleSubmit = useCallback(async (status = 'COMPLETED') => {
     if (loading) return;
     const token = localStorage.getItem('token');
-    
+
     // Map our local "Index-based" answers back to "ID-based" for the backend
     // Backend expects: { "questionID_123": "Option A" }
     const formattedAnswers = {};
-    
+
     if (test && test.questions) {
       test.questions.forEach((q, index) => {
         if (answers[index]) {
@@ -224,15 +251,15 @@ function TestPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/tests/${id}/submit`, {
+      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ 
-          answers: formattedAnswers, 
-          status: status 
+        body: JSON.stringify({
+          answers: formattedAnswers,
+          status: status
         }),
       });
 
@@ -246,21 +273,25 @@ function TestPage() {
   }, [id, answers, navigate, loading, test]);
 
   // --- 5. Effects (Timer, Auto-Submit, Tab Detection) ---
-  
+
   // Timer
   useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) return;
-    const interval = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    return () => clearInterval(interval);
-  }, [timeLeft]);
-
-  // Auto-Submit
-  useEffect(() => {
-    if (timeLeft === 0) {
-      alert("Time's up! Submitting your test...");
-      handleSubmit('TIMEOUT');
+    if (timeLeft === null) return;
+    
+    if (timeLeft <= 0) {
+      if (!loading) { 
+         alert("Time's up! Submitting your test...");
+         handleSubmit('TIMEOUT');
+      }
+      return;
     }
-  }, [timeLeft, handleSubmit]);
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeLeft, handleSubmit, loading]);
 
   // Tab Detection
   useEffect(() => {
@@ -271,7 +302,7 @@ function TestPage() {
         if (updated >= MAX_WARNINGS) {
           alert('Violation Limit Reached. Test Terminated');
           handleSubmit('TERMINATED');
-        } 
+        }
         return updated;
       });
     };
@@ -302,22 +333,22 @@ function TestPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 select-none">
-      
+
       {/* Header / Timer */}
       <TimerDisplay seconds={timeLeft || 0} />
       <WarningBanner count={warnings} />
 
       {/* Main Layout */}
       <div className="flex grow overflow-hidden">
-        
+
         {/* Left: Question Area (75%) */}
         <div className="w-3/4 flex flex-col p-6 overflow-y-auto">
-          
+
           {/* Question Header */}
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Question {currentQuestionIndex + 1}</h2>
             <div className="text-sm text-gray-500">
-               {test.title}
+              {test.title}
             </div>
           </div>
 
@@ -331,11 +362,11 @@ function TestPage() {
           {/* Options */}
           <div className="space-y-3 mb-8">
             {currentQuestion.options.map((option, index) => (
-              <label 
-                key={index} 
+              <label
+                key={index}
                 className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
-                  ${answers[currentQuestionIndex] === option 
-                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
+                  ${answers[currentQuestionIndex] === option
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
                     : 'border-gray-200 bg-white'}`}
               >
                 <input
@@ -353,19 +384,19 @@ function TestPage() {
 
           {/* Action Buttons */}
           <div className="mt-auto pt-6 border-t flex justify-between items-center">
-            
+
             <div className="space-x-3">
-              <button 
+              <button
                 onClick={handleClearResponse}
                 className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 font-medium transition"
               >
                 Clear Response
               </button>
-              <button 
+              <button
                 onClick={toggleMarkForReview}
                 className={`px-4 py-2 border rounded font-medium transition
-                  ${markedQuestions.includes(currentQuestionIndex) 
-                    ? 'bg-purple-100 text-purple-700 border-purple-300' 
+                  ${markedQuestions.includes(currentQuestionIndex)
+                    ? 'bg-purple-100 text-purple-700 border-purple-300'
                     : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
               >
                 {markedQuestions.includes(currentQuestionIndex) ? 'Unmark Review' : 'Mark for Review'}
@@ -373,19 +404,19 @@ function TestPage() {
             </div>
 
             <div className="space-x-3">
-              <button 
+              <button
                 onClick={handlePrev}
                 disabled={currentQuestionIndex === 0}
                 className={`px-6 py-2 rounded font-medium transition
-                  ${currentQuestionIndex === 0 
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                  ${currentQuestionIndex === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-gray-600 text-white hover:bg-gray-700'}`}
               >
                 Previous
               </button>
-              
+
               {currentQuestionIndex === test.questions.length - 1 ? (
-                <button 
+                <button
                   onClick={() => {
                     if (window.confirm("Are you sure you want to submit the test?")) {
                       handleSubmit('COMPLETED');
@@ -396,7 +427,7 @@ function TestPage() {
                   Submit Test
                 </button>
               ) : (
-                <button 
+                <button
                   onClick={handleNext}
                   className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold transition"
                 >
@@ -409,8 +440,8 @@ function TestPage() {
 
         {/* Right: Question Palette (25%) */}
         <div className="w-1/4 p-4 bg-gray-100 border-l border-gray-200 overflow-y-auto">
-          <QuestionPalette 
-            totalQuestions={test.questions.length} 
+          <QuestionPalette
+            totalQuestions={test.questions.length}
             currentQuestionIndex={currentQuestionIndex}
             answers={answers}
             markedQuestions={markedQuestions}
