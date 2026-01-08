@@ -36,9 +36,12 @@ function Navbar() {
                             {user.role === 'ADMIN' && (
                                 <Link to="/create-test" className='text-green-400 hover:text-green-300 transition border border-green-400 px-3 py-1 rounded hover:bg-green-900'>+ Create Test</Link>
                             )}
+                            <Link to="/profile" className="hover:text-blue-400 transition">
+                              Profile
+                            </Link>
 
-                            <button onClick = {handleLogout} className='bg-red-600 px-4 py-2 rounded hover:bg-red-700 transition text-sm ml-4'>Logout</button>
-                        </>
+                           
+                        </> 
                     ) : (
                         <>
                             <Link to="/login" className="hover:text-blue-400">Login</Link>
