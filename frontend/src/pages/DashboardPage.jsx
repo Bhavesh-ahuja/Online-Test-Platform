@@ -104,11 +104,12 @@ function DashboardPage() {
 
             <div className="flex flex-col gap-2">
               <Link
-                to={`/test/${test.id}`}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center"
-              >
-                Take Test
-              </Link>
+  to={`/test/${test.id}/instructions`}
+  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center"
+>
+  Take Test
+</Link>
+
 
               {isAdmin && (
                 <div className="flex gap-2">
