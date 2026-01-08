@@ -113,7 +113,7 @@ function DashboardPage() {
               {isAdmin && (
                 <div className="flex gap-2">
                   <Link
-                    to={`/test/${test.id}/admin-results`}
+                    to={`/tests/${test.id}/admin-results`}
                     className="flex-1 bg-gray-800 text-white py-2 rounded hover:bg-gray-900 transition text-center border border-gray-600 text-sm flex items-center justify-center"
                   >
                     Results
