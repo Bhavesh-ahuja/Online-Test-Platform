@@ -26,9 +26,17 @@ function ProfilePage() {
           },
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch profile");
-        }
+        if (response.status === 401 || response.status === 403) {
+         localStorage.removeItem("token");
+         localStorage.removeItem("user");
+         navigate("/login");
+        return;
+}
+
+         if (!response.ok) {
+           throw new Error("Failed to fetch profile");
+          }
+
 
         const data = await response.json();
         setUser(data);
