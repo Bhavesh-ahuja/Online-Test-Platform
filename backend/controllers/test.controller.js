@@ -6,7 +6,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 // Create a new test with questions
 export const createTest = async (req, res) => {
-  const { title, description, duration, questions } = req.body;
+  const { title, description, duration, questions, scheduledStart, scheduledEnd } = req.body;
   const userId = req.user.userId;  //Got from auth middleware
 
   try {
@@ -16,6 +16,8 @@ export const createTest = async (req, res) => {
         title,
         description,
         duration: parseInt(duration),
+        scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+        scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
         createdById: userId,
         questions: {
           create: questions.map(q => ({
@@ -35,6 +37,120 @@ export const createTest = async (req, res) => {
   } catch (error) {
     console.error('Create test error:', error);
     res.status(500).json({ error: 'Failed to create test' });
+  }
+};
+
+export const updateTest = async (req, res) => {
+  const { id } = req.params;
+  const { title, description, duration, questions, scheduledStart, scheduledEnd } = req.body;
+  // const userId = req.user.userId;
+
+  try {
+    // 1. Check if test exists and belongs to user (or is admin)
+    const existingTest = await prisma.test.findUnique({
+      where: { id: parseInt(id) },
+      include: { _count: { select: { submissions: true } } }
+    });
+
+    if (!existingTest) return res.status(404).json({ error: 'Test not found' });
+
+    // 2. Check for Submissions (Safety Lock)
+    const hasSubmissions = existingTest._count.submissions > 0;
+
+    // 3. Prepare Update Data
+    const updateData = {
+      title,
+      description,
+      duration: parseInt(duration),
+      scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+      scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
+    };
+
+    // 4. Handle Questions Logic
+    if (questions && questions.length > 0) {
+      // If students have taken the test, we CANNOT delete/re-create questions 
+      // because it would break their result history.
+      if (!hasSubmissions) {
+        updateData.questions = {
+          deleteMany: {},
+          create: questions.map(q => ({
+            text: q.text,
+            type: q.type,
+            options: q.options || [],
+            correctAnswer: q.correctAnswer
+          }))
+        };
+      }
+    }
+
+    // 5. Perform Update
+    const updatedTest = await prisma.test.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: { questions: true }
+    });
+
+    res.json(updatedTest);
+
+  } catch (error) {
+    console.error('Update test error:', error);
+    res.status(500).json({ error: 'Failed to update test' });
+  }
+};
+
+export const startTest = async (req, res) => {
+  const { id } = req.params;
+  const studentId = req.user.userId;
+
+  try {
+    const test = await prisma.test.findUnique({ where: { id: parseInt(id) } });
+    if (!test) return res.status(404).json({ error: 'Test not found' });
+
+    // 1. Check Schedule Window (Server Time)
+    const now = new Date();
+
+    if (test.scheduledStart && now < new Date(test.scheduledStart)) {
+      return res.status(403).json({ error: `Test has not started yet. Starts at: ${new Date(test.scheduledStart).toLocaleString()}` });
+    }
+    if (test.scheduledEnd && now > new Date(test.scheduledEnd)) {
+      return res.status(403).json({ error: 'Test window has closed.' });
+    }
+
+    // 2. Check for existing submission
+    let submission = await prisma.testSubmission.findFirst({
+      where: { testId: parseInt(id), studentId: studentId }
+    });
+
+    // 3. Create or Resume
+    if (!submission) {
+      submission = await prisma.testSubmission.create({
+        data: {
+          test: {
+            connect: { id: parseInt(id) }
+          },
+          student: {
+            connect: { id: studentId }
+          },
+          status: 'IN_PROGRESS',
+          score: 0
+        }
+      });
+    } else {
+      if (submission.status !== 'IN_PROGRESS') {
+        return res.status(403).json({ error: 'Test already completed.' });
+      }
+    }
+
+    // 4. Return Session Data
+    res.json({
+      message: 'Test started',
+      startTime: submission.createdAt,
+      submissionId: submission.id
+    });
+
+  } catch (error) {
+    console.error("Start test error:", error);
+    res.status(500).json({ error: 'Failed to start test' });
   }
 };
 
@@ -90,57 +206,71 @@ export const getTestById = async (req, res) => {
 
 
 export const submitTest = async (req, res) => {
-  const { id } = req.params;  //Test ID
-  const { answers, status } = req.body;  // { "questionId": "selectedAnswer", ... }
+  const { id } = req.params;
+  const { answers, status } = req.body;
   const studentId = req.user.userId;
 
   try {
-    // 1 Get the correct answers from the database
+    const submission = await prisma.testSubmission.findFirst({
+      where: {
+        testId: parseInt(id),
+        studentId: studentId,
+        status: 'IN_PROGRESS'
+      },
+      include: { test: true }
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Active test session not found.' });
+    }
+
+    // Server-Side Time Validation
+    const now = new Date();
+    const startTime = new Date(submission.createdAt);
+    const durationInMs = submission.test.duration * 60 * 1000;
+    const bufferInMs = 2 * 60 * 1000; // 2 min buffer for network latency
+
+    if (status === 'COMPLETED' && (now - startTime > durationInMs + bufferInMs)) {
+      console.warn(`Late submission by user ${studentId}`);
+      // You can mark as TIMEOUT or just proceed. We'll proceed but log it.
+    }
+
     const correctQuestions = await prisma.question.findMany({
       where: { testId: parseInt(id) },
       select: { id: true, correctAnswer: true }
     });
 
-    // 2 Grade the test
     let score = 0;
     const answerRecords = [];
 
     for (const q of correctQuestions) {
       const studentAnswer = answers[q.id];
       const isCorrect = studentAnswer === q.correctAnswer;
-
-      if (isCorrect) {
-        score++;
-      }
+      if (isCorrect) score++;
 
       answerRecords.push({
         selectedAnswer: studentAnswer || "No Answer",
         isCorrect: isCorrect,
-        questionId: q.id
+        questionId: q.id,
+        submissionId: submission.id
       });
     }
 
-    // 3 Save the submission and answers in a transaction
-    const submission = await prisma.testSubmission.create({
-      data: {
-        score: score,
-        status: status || 'COMPLETED',  //Default to completed if missing
-        studentId: studentId,
-        testId: parseInt(id),
-        answers: {
-          create: answerRecords  // Create all related answers
+    await prisma.$transaction([
+      prisma.answer.createMany({ data: answerRecords }),
+      prisma.testSubmission.update({
+        where: { id: submission.id },
+        data: {
+          score: score,
+          status: status || 'COMPLETED',
         }
-      }
-    });
+      })
+    ]);
 
-    res.status(201).json({
-      message: 'Test submitted successfully!',
-      score: score,
-      total: correctQuestions.length,
-      submissionId: submission.id
-    });
+    res.status(200).json({ message: 'Test submitted', submissionId: submission.id });
+
   } catch (error) {
-    console.error("Submit test error:", error);
+    console.error("Submit error:", error);
     res.status(500).json({ error: 'Failed to submit test' });
   }
 };
@@ -211,68 +341,7 @@ export const getTestSubmissions = async (req, res) => {
   }
 };
 
-export const updateTest = async (req, res) => {
-  const { id } = req.params;
-  const { title, description, duration, questions } = req.body;
-  const userId = req.user.userId;
 
-  try {
-    // 1. Check if test exists and belongs to user (or is admin)
-    const existingTest = await prisma.test.findUnique({
-      where: { id: parseInt(id) },
-      include: { _count: { select: { submissions: true } } }
-    });
-
-    if (!existingTest) return res.status(404).json({ error: 'Test not found' });
-
-    // 2. Check for Submissions (Safety Lock)
-    const hasSubmissions = existingTest._count.submissions > 0;
-
-    // 3. Prepare Update Data
-    const updateData = {
-      title,
-      description,
-      duration: parseInt(duration),
-    };
-
-    // 4. Handle Questions Logic
-    if (questions && questions.length > 0) {
-      if (hasSubmissions) {
-        // If students have taken the test, we CANNOT delete/re-create questions 
-        // because it would break their result history.
-        // We will ignore the 'questions' update and warn the user (or just update metadata).
-        // console.warn("Skipping question update due to existing submissions");
-        return res.status(400).json({
-          warning: "This test cannot be updated because submissions already exist."
-        });
-      } else {
-        // Safe to update questions: Delete all old ones, create new ones
-        updateData.questions = {
-          deleteMany: {}, // Wipe old questions
-          create: questions.map(q => ({
-            text: q.text,
-            type: q.type,
-            options: q.options || [],
-            correctAnswer: q.correctAnswer
-          }))
-        };
-      }
-    }
-
-    // 5. Perform Update
-    const updatedTest = await prisma.test.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-      include: { questions: true }
-    });
-
-    res.json(updatedTest);
-
-  } catch (error) {
-    console.error('Update test error:', error);
-    res.status(500).json({ error: 'Failed to update test' });
-  }
-};
 
 export const deleteTest = async (req, res) => {
   const { id } = req.params;
@@ -300,6 +369,7 @@ export const deleteTest = async (req, res) => {
       prisma.question.deleteMany({ where: { testId: parseInt(id) } }),
       prisma.test.delete({ where: { id: parseInt(id) } })
     ]);
+    res.json({ message: 'Test deleted successfully' });
   }
   catch (error) {
     console.error('Delete test error:', error);
@@ -309,7 +379,7 @@ export const deleteTest = async (req, res) => {
 
 
 export const uploadTestPDF = async (req, res) => {
-  
+
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF file uploaded" });
 
@@ -341,7 +411,7 @@ export const uploadTestPDF = async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
 
-    
+
 
     // 3. Prompt Engeneering
     const prompt = `
@@ -351,11 +421,11 @@ export const uploadTestPDF = async (req, res) => {
     Your Goal: Convert the text into a strict JSON array.
     
     Rules:
-    1. Extract the "text" (questiosn).
+    1. Extract the "text" (questions).
     2. Extract the "options" (array of strings).
     3. If you can detect the correct answer (marked by *,bold,or an answer key), put it in "correctAnswer".
-       If you connot find the answer, leave "correctANswer" as an empty string "".
-    4. Dafault "type" to "MCQ".
+       If you cannot find the answer, leave "correct Answer" as an empty string "".
+    4. Default "type" to "MCQ".
     5. Output ONLY valid JSON. No markdown.
     
     JSON Structure:

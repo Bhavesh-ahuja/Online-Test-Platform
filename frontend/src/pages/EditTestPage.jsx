@@ -9,7 +9,9 @@ function EditTestPage() {
   const [testData, setTestData] = useState({
     title: '',
     description: '',
-    duration: 30
+    duration: 30,
+    scheduledStart: '',
+    scheduledEnd: ''
   });
 
   const [questions, setQuestions] = useState([]);
@@ -25,10 +27,18 @@ function EditTestPage() {
         if (!response.ok) throw new Error('Failed to fetch test');
         const data = await response.json();
         
+        // Format dates for input[type="datetime-local"] (YYYY-MM-DDTHH:mm)
+        const formatDate = (dateString) => {
+            if (!dateString) return '';
+            return new Date(dateString).toISOString().slice(0, 16);
+        };
+
         setTestData({
           title: data.title,
           description: data.description || '',
-          duration: data.duration
+          duration: data.duration,
+          scheduledStart: formatDate(data.scheduledStart),
+          scheduledEnd: formatDate(data.scheduledEnd)
         });
         setQuestions(data.questions);
       } catch (err) {
@@ -41,46 +51,20 @@ function EditTestPage() {
     fetchTest();
   }, [id, navigate]);
 
-  // --- Handlers (Identical to CreateTestPage) ---
   const handleTestChange = (e) => setTestData({ ...testData, [e.target.name]: e.target.value });
 
-  const handleQuestionChange = (index, field, value) => {
-    const newQuestions = [...questions];
-    newQuestions[index][field] = value;
-    setQuestions(newQuestions);
-  };
-
+  // (Keep Question/Option Handlers exactly the same as CreatePage)
+  const handleQuestionChange = (index, field, value) => { const newQuestions = [...questions]; newQuestions[index][field] = value; setQuestions(newQuestions); };
   const addQuestion = () => setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
-
-  const removeQuestion = (index) => {
-    if (questions.length === 1) return alert("Test must have at least one question.");
-    setQuestions(questions.filter((_, i) => i !== index));
-  };
-
-  const handleOptionChange = (qIndex, oIndex, value) => {
-    const newQuestions = [...questions];
-    newQuestions[qIndex].options[oIndex] = value;
-    setQuestions(newQuestions);
-  };
-
-  const addOption = (qIndex) => {
-    const newQuestions = [...questions];
-    newQuestions[qIndex].options.push('');
-    setQuestions(newQuestions);
-  };
-
-  const removeOption = (qIndex, oIndex) => {
-    const newQuestions = [...questions];
-    if (newQuestions[qIndex].options.length <= 2) return alert("MCQ must have at least 2 options.");
-    newQuestions[qIndex].options.splice(oIndex, 1);
-    setQuestions(newQuestions);
-  };
+  const removeQuestion = (index) => { if (questions.length === 1) return alert("Min 1 question."); setQuestions(questions.filter((_, i) => i !== index)); };
+  const handleOptionChange = (qIndex, oIndex, value) => { const newQuestions = [...questions]; newQuestions[qIndex].options[oIndex] = value; setQuestions(newQuestions); };
+  const addOption = (qIndex) => { const newQuestions = [...questions]; newQuestions[qIndex].options.push(''); setQuestions(newQuestions); };
+  const removeOption = (qIndex, oIndex) => { const newQuestions = [...questions]; if (newQuestions[qIndex].options.length <= 2) return alert("Min 2 options."); newQuestions[qIndex].options.splice(oIndex, 1); setQuestions(newQuestions); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
 
-    // Validation
     const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
     if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
 
@@ -94,7 +78,7 @@ function EditTestPage() {
         body: JSON.stringify({ ...testData, questions })
       });
 
-      if (!response.ok) throw new Error('Failed to update test. Note: You cannot modify questions if students have already taken this test.');
+      if (!response.ok) throw new Error('Failed to update test.');
 
       alert('Test Updated Successfully!');
       navigate('/dashboard');
@@ -107,16 +91,29 @@ function EditTestPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-6">Edit Test: {testData.title}</h1>
+      <h1 className="text-3xl font-bold mb-6">Edit Test</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
           <h2 className="text-xl font-semibold">Test Details</h2>
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
-          <div>
-            <label className="block text-sm text-gray-600">Duration (minutes)</label>
-            <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Duration (minutes)</label>
+              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+            </div>
+            
+            {/* --- NEW SCHEDULED FIELDS --- */}
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Start Window</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">End Window</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
+            </div>
           </div>
         </div>
 
@@ -142,7 +139,7 @@ function EditTestPage() {
                 <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline">+ Add Option</button>
               </div>
 
-              <input className="w-full p-2 border rounded border-green-200 bg-green-50" placeholder="Correct Answer (Must match one option exactly)" value={q.correctAnswer} required onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
+              <input className="w-full p-2 border rounded border-green-200 bg-green-50" placeholder="Correct Answer" value={q.correctAnswer} required onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
             </div>
           ))}
         </div>
