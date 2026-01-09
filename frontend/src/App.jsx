@@ -16,6 +16,7 @@ import ResultsPage from './pages/ResultsPage';
 // import MyResultsPage from './pages/MyResultsPage';
 import AdminResultsPage from './pages/AdminResultsPage';
 import TestInstructions from './pages/TestInstructions';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
@@ -34,6 +35,8 @@ function App() {
             <Route path="/create-test" element={<CreateTestPage />} />
             <Route path="/test/edit/:id" element={<EditTestPage />} />
             <Route path="/tests/:id/admin-results" element={<AdminResultsPage />} />
+             
+            <Route path="/profile" element={<ProfilePage />} />
 
             {/* Test Taking & Result Routes (Accessible to Logged-in Users) */}
            {/* Test Taking & Result Routes (Accessible to Logged-in Users) */}
