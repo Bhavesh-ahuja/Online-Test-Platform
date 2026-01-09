@@ -63,6 +63,10 @@ app.get('/api/users', async (req, res) =>{
   }
 });
 
+import userRoutes from './routes/user.routes.js';
+
+app.use('/api/users', userRoutes);
+
 // --- Start the Server ---
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
