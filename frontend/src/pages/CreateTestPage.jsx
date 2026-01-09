@@ -10,7 +10,9 @@ function CreateTestPage() {
   const [testData, setTestData] = useState({
     title: '',
     description: '',
-    duration: 30
+    duration: 30,
+    scheduledStart: '',
+    scheduledEnd: '',
   });
 
   // Default start with one empty question
@@ -192,9 +194,22 @@ function CreateTestPage() {
           <h2 className="text-xl font-semibold">Test Details</h2>
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
-          <div>
-            <label className="block text-sm text-gray-600">Duration (minutes)</label>
-            <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600">Duration (minutes)</label>
+              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+            </div>
+
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Start Window (Optional)</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">End Window (Optional)</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
+            </div>
           </div>
         </div>
 
