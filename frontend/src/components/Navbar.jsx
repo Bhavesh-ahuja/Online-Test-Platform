@@ -4,7 +4,6 @@ import { Link, useNavigate } from 'react-router-dom';
 function Navbar() {
 
     const navigate = useNavigate();
-
     // 1. Check if user is logged in by looking for the token 
     const token = localStorage.getItem('token');
 
@@ -32,6 +31,7 @@ function Navbar() {
                         <>
                             <Link to="/dashboard" className="hover:text-blue-400 transition">DashBoard</Link>
 
+                            <Link to="/my-results" className='hover:text-blue-400 transition'>My Results</Link>
                             {/* Only Admin see this button */}
                             {user.role === 'ADMIN' && (
                                 <Link to="/create-test" className='text-green-400 hover:text-green-300 transition border border-green-400 px-3 py-1 rounded hover:bg-green-900'>+ Create Test</Link>

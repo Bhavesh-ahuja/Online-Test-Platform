@@ -13,7 +13,7 @@ import CreateTestPage from './pages/CreateTestPage';
 import EditTestPage from './pages/EditTestPage';
 import TestPage from './pages/TestPage';
 import ResultsPage from './pages/ResultsPage';
-// import MyResultsPage from './pages/MyResultsPage';
+import MyResultsPage from './pages/MyResultsPage';
 import AdminResultsPage from './pages/AdminResultsPage';
 import TestInstructions from './pages/TestInstructions';
 import ProfilePage from './pages/ProfilePage';
@@ -46,7 +46,7 @@ function App() {
             <Route path="results/:submissionId" element={<ResultsPage />} />
 
             {/* User Result Routes */}
-            {/* <Route path="/my-results" element={<MyResultsPage />} /> */}
+            <Route path="/my-results" element={<MyResultsPage />} />
           </Routes>
         </main>
       </div>
