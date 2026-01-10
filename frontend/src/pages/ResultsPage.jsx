@@ -40,12 +40,6 @@ function ResultsPage() {
   if (loading) return <div className="text-center mt-10">Loading Results...</div>;
   if (error) return <div className="text-center mt-10 text-red-500">{error}</div>;
   if (!result) return null;
-  // SAFE total questions calculation (prevents crash)
-  const totalQuestions =
-  result?.test?._count?.questions ??
-  result?.answers?.length ??
-  0;
-
 
   //   Helper to detemine tailwind classes
   const getAnswerClass = (answer, option) => {
@@ -68,13 +62,11 @@ function ResultsPage() {
       <div className="bg-white p-8 rounded-lg shadow-md mb-8 text-center">
         <h1 className="text-2xl font-bold mb-2">Results for {result.test.title}</h1>
         <p className="text-5xl font-extrabold text-blue-600">
-  {result.score} / {totalQuestions}
-</p>
-
-<p className="text-gray-600 mt-2">
-  You scored {totalQuestions === 0 ? 0 : ((result.score / totalQuestions) * 100).toFixed(0)}%
-</p>
-
+          {result.score} / {result.test._count.questions}
+        </p>
+        <p className="text-gray-600 mt-2">
+          You scored {((result.score / result.test._count.questions) * 100).toFixed(0)}%
+        </p>
       </div>
 
       {/* Detailed Answers */}

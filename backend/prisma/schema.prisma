@@ -1,3 +1,10 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,84 +15,82 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
   STUDENT
+  ADMIN
 }
 
-enum AttemptType {
-  ONCE
-  LIMITED
-  UNLIMITED
-}
-
+// Defines the User table
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String
-  role      Role
+  password  String   
+  role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  testsCreated Test[]           @relation("CreatedTests")
-  submissions  TestSubmission[]
+  // Relation: One user can create many tests
+  tests     Test[]
+  submissions TestSubmission[] // A user can have many submissions
 }
 
+// Defines the Test table
 model Test {
-  id             Int       @id @default(autoincrement())
-  title          String
-  description    String?
-  duration       Int
-  scheduledStart DateTime?
-  scheduledEnd   DateTime?
-  createdAt      DateTime  @default(now())
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  duration    Int        // Duration in minutes
+  createdAt   DateTime   @default(now())
 
-  attemptType AttemptType @default(ONCE)
-  maxAttempts Int?
-
+  // Scheduling
+  scheduledStart DateTime?  //Optional: If null, starts immediately
+  scheduledEnd   DateTime?  //Optional: If null, never expires
+  
+  // Relation: Test belongs to a User (Admin)
   createdById Int
-  createdBy   User @relation("CreatedTests", fields: [createdById], references: [id])
-
+  createdBy   User       @relation(fields: [createdById], references: [id])
+  
+  // Relation: One test has many questions & can have many submissions
   questions   Question[]
-  submissions TestSubmission[]
+  submissions TestSubmission[] 
+
 }
 
+// Defines the Question table
 model Question {
   id            Int      @id @default(autoincrement())
   text          String
-  type          String
-  options       String[]
-  correctAnswer String
-
-  testId Int
-  test   Test @relation(fields: [testId], references: [id])
-
-  answers Answer[] // ✅ FIXED: opposite relation added
+  type          String   // "MCQ" or "SHORT"
+  options       String[] // Array of options for MCQ
+  correctAnswer String?  // Optional for short answers
+  
+  // Relation: Question belongs to a Test
+  testId        Int
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers       Answer[]  // A question can have many answers
 }
 
 model TestSubmission {
   id        Int      @id @default(autoincrement())
-  status    String
   score     Int
+  status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
-
-  testId Int
-  test   Test @relation(fields: [testId], references: [id])
-
+  
+  // Relations
   studentId Int
-  student   User @relation(fields: [studentId], references: [id])
-
-  answers Answer[]
+  student   User     @relation(fields: [studentId], references: [id])
+  testId    Int
+  test      Test     @relation(fields: [testId], references: [id])
+  answers   Answer[] // A submission is made up of many answers
 }
 
 model Answer {
+  id           Int    @id @default(autoincrement())
   selectedAnswer String
-  isCorrect      Boolean
-
-  questionId Int
-  question   Question @relation(fields: [questionId], references: [id])
-
+  isCorrect    Boolean
+  
+  // Relations
   submissionId Int
-  submission   TestSubmission @relation(fields: [submissionId], references: [id])
-
-  @@id([submissionId, questionId])
+  submission   TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId   Int
+  question     Question       @relation(fields: [questionId], references: [id])
 }
