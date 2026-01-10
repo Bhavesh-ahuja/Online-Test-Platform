@@ -22,6 +22,12 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+/**
+ * ============================
+ * GENERAL ROUTES (NO :id)
+ * ============================
+ */
+
 // GET /api/tests - Anyone logged in can see all available tests
 router.get('/', authenticateToken, getAllTests);
 
@@ -31,29 +37,50 @@ router.post('/', authenticateToken, isAdmin, createTest);
 router.get('/:id/admin', getTestByIdForAdmin);
 
 
-// GET /api/tests/:id - Get details of a single test by ID
-router.get('/:id', authenticateToken, getTestById);
+// POST /api/tests/upload-pdf - Admin only: Upload test PDF
+router.post(
+  '/upload-pdf',
+  authenticateToken,
+  isAdmin,
+  upload.single('file'),
+  uploadTestPDF
+);
 
-// POST /api/tests/:id/submit - Submit answers for a specific test
-router.post('/:id/submit', authenticateToken, submitTest);
-
-// GET /api/tests/results/:submissionId - Get result of a submitted test
-router.get('/results/:submissionId', authenticateToken, getTestResult);
-
-// GET /api/tests/my-submissions - Get all submissions of the logged-in user
+// GET /api/tests/my-submissions - Get all submissions of logged-in user
+// IMPORTANT: Must come BEFORE `/:id`
 router.get('/my-submissions', authenticateToken, getMySubmissions);
 
-// GET /api/tests/:id/submissions - Admin only: Get all submissions for a specific test
-router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
+/**
+ * ============================
+ * TEST ROUTES (WITH :id)
+ * ============================
+ */
 
-// PUT /api/tests/:id - Admin only: Update an existing test
+// GET /api/tests/:id - Get test details by ID
+router.get('/:id', authenticateToken, getTestById);
+
+// PUT /api/tests/:id - Admin only: Update test
 router.put('/:id', authenticateToken, isAdmin, updateTest);
 
-// DELETE /api/tests/:id - Admin only: Delete an existing test
+// DELETE /api/tests/:id - Admin only: Delete test
 router.delete('/:id', authenticateToken, isAdmin, deleteTest);
 
-// POST /api/tests/upload-pdf
-router.post('/upload-pdf', authenticateToken, isAdmin, upload.single('file'), uploadTestPDF);
-
+// POST /api/tests/:id/start - Start a test
 router.post('/:id/start', authenticateToken, startTest);
+
+// POST /api/tests/:id/submit - Submit test answers
+router.post('/:id/submit', authenticateToken, submitTest);
+
+/**
+ * ============================
+ * SUB-RESOURCES
+ * ============================
+ **/
+
+// GET /api/tests/:id/submissions - Admin only: Get all submissions for a test
+router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
+
+// GET /api/tests/results/:submissionId - Get test result
+router.get('/results/:submissionId', authenticateToken, getTestResult);
+
 export default router;
