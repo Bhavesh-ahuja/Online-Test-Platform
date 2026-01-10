@@ -463,4 +463,27 @@ export const uploadTestPDF = async (req, res) => {
     console.error("PDF Upload Error:", error);
     res.status(500).json({ error: "Failed to process PDFDataRangeTransport." });
   }
+    
+};
+// ADMIN: Get test with correct answers (for Edit Test page)
+export const getTestByIdForAdmin = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const test = await prisma.test.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        questions: true // ✅ includes correctAnswer
+      }
+    });
+
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    res.json(test);
+  } catch (error) {
+    console.error('Admin get test error:', error);
+    res.status(500).json({ error: 'Failed to fetch test (admin)' });
+  }
 };

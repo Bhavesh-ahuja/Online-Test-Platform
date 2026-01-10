@@ -14,6 +14,7 @@ import {
 } from '../controllers/test.controller.js';
 import multer from "multer";
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
+import { getTestByIdForAdmin } from '../controllers/test.controller.js';
 
 const router = express.Router();
 
@@ -26,6 +27,9 @@ router.get('/', authenticateToken, getAllTests);
 
 // POST /api/tests - Only ADMINS can create a new test
 router.post('/', authenticateToken, isAdmin, createTest);
+// ADMIN route – returns correct answers (for Edit Test)
+router.get('/:id/admin', getTestByIdForAdmin);
+
 
 // GET /api/tests/:id - Get details of a single test by ID
 router.get('/:id', authenticateToken, getTestById);
