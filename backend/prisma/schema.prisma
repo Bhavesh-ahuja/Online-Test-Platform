@@ -1,10 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,82 +8,84 @@ datasource db {
 }
 
 enum Role {
-  STUDENT
   ADMIN
+  STUDENT
 }
 
-// Defines the User table
+enum AttemptType {
+  ONCE
+  LIMITED
+  UNLIMITED
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   
-  role      Role     @default(STUDENT)
+  password  String
+  role      Role
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relation: One user can create many tests
-  tests     Test[]
-  submissions TestSubmission[] // A user can have many submissions
+  testsCreated Test[]           @relation("CreatedTests")
+  submissions  TestSubmission[]
 }
 
-// Defines the Test table
 model Test {
-  id          Int        @id @default(autoincrement())
-  title       String
-  description String?
-  duration    Int        // Duration in minutes
-  createdAt   DateTime   @default(now())
+  id             Int       @id @default(autoincrement())
+  title          String
+  description    String?
+  duration       Int
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  createdAt      DateTime  @default(now())
 
-  // Scheduling
-  scheduledStart DateTime?  //Optional: If null, starts immediately
-  scheduledEnd   DateTime?  //Optional: If null, never expires
-  
-  // Relation: Test belongs to a User (Admin)
+  attemptType AttemptType @default(ONCE)
+  maxAttempts Int?
+
   createdById Int
-  createdBy   User       @relation(fields: [createdById], references: [id])
-  
-  // Relation: One test has many questions & can have many submissions
-  questions   Question[]
-  submissions TestSubmission[] 
+  createdBy   User @relation("CreatedTests", fields: [createdById], references: [id])
 
+  questions   Question[]
+  submissions TestSubmission[]
 }
 
-// Defines the Question table
 model Question {
   id            Int      @id @default(autoincrement())
   text          String
-  type          String   // "MCQ" or "SHORT"
-  options       String[] // Array of options for MCQ
-  correctAnswer String?  // Optional for short answers
-  
-  // Relation: Question belongs to a Test
-  testId        Int
-  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  answers       Answer[]  // A question can have many answers
+  type          String
+  options       String[]
+  correctAnswer String
+
+  testId Int
+  test   Test @relation(fields: [testId], references: [id])
+
+  answers Answer[] // ✅ FIXED: opposite relation added
 }
 
 model TestSubmission {
   id        Int      @id @default(autoincrement())
+  status    String
   score     Int
-  status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
-  
-  // Relations
+
+  testId Int
+  test   Test @relation(fields: [testId], references: [id])
+
   studentId Int
-  student   User     @relation(fields: [studentId], references: [id])
-  testId    Int
-  test      Test     @relation(fields: [testId], references: [id])
-  answers   Answer[] // A submission is made up of many answers
+  student   User @relation(fields: [studentId], references: [id])
+
+  answers Answer[]
 }
 
 model Answer {
-  id           Int    @id @default(autoincrement())
   selectedAnswer String
-  isCorrect    Boolean
-  
-  // Relations
+  isCorrect      Boolean
+
+  questionId Int
+  question   Question @relation(fields: [questionId], references: [id])
+
   submissionId Int
-  submission   TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  questionId   Int
-  question     Question       @relation(fields: [questionId], references: [id])
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
+
+  @@id([submissionId, questionId])
 }

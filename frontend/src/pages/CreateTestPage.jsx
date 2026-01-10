@@ -1,12 +1,11 @@
-// CreateTestPage.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
+import { localToUtc } from '../utils/datetime';
+
 
 function CreateTestPage() {
   const navigate = useNavigate();
 
-  // State for Test Details
   const [testData, setTestData] = useState({
     title: '',
     description: '',
@@ -15,263 +14,454 @@ function CreateTestPage() {
     scheduledEnd: '',
   });
 
-  // Default start with one empty question
   const [questions, setQuestions] = useState([
-    { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }
+    { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' },
   ]);
 
+  const [showStartOk, setShowStartOk] = useState(false);
+  const [showEndOk, setShowEndOk] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  // ATTEMPT CONFIG
+  const [attemptType, setAttemptType] = useState('ONCE');
+  const [maxAttempts, setMaxAttempts] = useState(1);
 
-  // Helper: Update Test Details
+  const markDirty = () => setHasUnsavedChanges(true);
+
   const handleTestChange = (e) => {
     setTestData({ ...testData, [e.target.name]: e.target.value });
+    markDirty();
   };
 
-  // --- Question Management ---
-  const handleQuestionChange = (index, field, value) => {
-    const newQuestions = [...questions];
-    newQuestions[index][field] = value;
-    setQuestions(newQuestions);
+  const handleQuestionChange = (qi, field, value) => {
+    const copy = [...questions];
+    copy[qi][field] = value;
+    setQuestions(copy);
+    markDirty();
+  };
+  const handleFileUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setIsUploading(true);
+  const token = localStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const response = await fetch(
+      'http://localhost:8000/api/tests/upload-pdf',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to upload PDF');
+
+    // If only one empty question exists → replace
+    if (questions.length === 1 && questions[0].text.trim() === '') {
+      setQuestions(data.questions);
+    } else {
+      if (
+        window.confirm(
+          `Found ${data.questions.length} questions. Append them to existing questions?`
+        )
+      ) {
+        setQuestions([...questions, ...data.questions]);
+      }
+    }
+
+    alert(`Successfully imported ${data.questions.length} questions`);
+  } catch (error) {
+    alert('Import Error: ' + error.message);
+  } finally {
+    setIsUploading(false);
+    e.target.value = null;
+  }
+};
+
+  const handleOptionChange = (qi, oi, value) => {
+    const copy = [...questions];
+
+    if (copy[qi].correctAnswer === copy[qi].options[oi]) {
+      copy[qi].correctAnswer = value;
+    }
+
+    copy[qi].options[oi] = value;
+    setQuestions(copy);
+    markDirty();
+  };
+
+  const addOption = (qi) => {
+    const copy = [...questions];
+    copy[qi].options.push('');
+    setQuestions(copy);
+    markDirty();
+  };
+
+  const removeOption = (qi, oi) => {
+    const copy = [...questions];
+    if (copy[qi].options.length <= 2) return;
+    copy[qi].options.splice(oi, 1);
+    setQuestions(copy);
+    markDirty();
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
+    setQuestions([
+      ...questions,
+      { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' },
+    ]);
+    markDirty();
   };
 
-  const removeQuestion = (index) => {
+  const removeQuestion = (qi) => {
     if (questions.length === 1) {
-      alert("Test must have at least one question.");
+      alert('At least one question is required');
       return;
     }
-    const newQuestions = questions.filter((_, i) => i !== index);
-    setQuestions(newQuestions);
+    setQuestions(questions.filter((_, index) => index !== qi));
+    markDirty();
   };
 
-  // --- Option Management ---
-  const handleOptionChange = (qIndex, oIndex, value) => {
-    const newQuestions = [...questions];
-    newQuestions[qIndex].options[oIndex] = value;
-    setQuestions(newQuestions);
-  };
-
-  const addOption = (qIndex) => {
-    const newQuestions = [...questions];
-    newQuestions[qIndex].options.push('');
-    setQuestions(newQuestions);
-  };
-
-  const removeOption = (qIndex, oIndex) => {
-    const newQuestions = [...questions];
-    if (newQuestions[qIndex].options.length <= 2) {
-      alert("MCQ must have at least 2 options.");
-      return;
-    }
-    newQuestions[qIndex].options.splice(oIndex, 1);
-    setQuestions(newQuestions);
-  };
-
-  // --- PDF Management ---
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    const token = localStorage.getItem('token');
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const response = await fetch('http://localhost:8000/api/tests/upload-pdf', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-          // Do not set Content-Type for FormData
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to upload PDF');
-
-      // Logic: If the current form has only 1 empty question, replace it.
-      // Otherwise, append the new questions to the bottom.
-      if (questions.length === 1 && questions[0].text === '') {
-        setQuestions(data.questions);
-      } else {
-        // Confirmation before appending
-        if (window.confirm(`Found ${data.questions.length} questions. Append them to your existing list?`)) {
-          setQuestions([...questions, ...data.questions]);
-        }
-      }
-
-      alert(`Successfully imported ${data.questions.length} questions! Review them below.`);
-
-    } catch (error) {
-      alert("Import Error: " + error.message);
-    } finally {
-      setIsUploading(false);
-      e.target.value = null; // Reset input
-    }
-  };
-
-  // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
 
-    // Validation: Check for empty options
-    const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
-    if (invalidMCQ) {
-      alert("All MCQ questions must have at least 2 options.");
-      return;
+    for (const q of questions) {
+      if (!q.text || q.text.trim() === '') {
+        alert('Question text cannot be empty');
+        return;
+      }
+      if (!q.correctAnswer) {
+        alert('Each question must have a correct answer');
+        return;
+      }
     }
 
+    const token = localStorage.getItem('token');
+
     try {
-      const response = await fetch('http://localhost:8000/api/tests', {
+      const res = await fetch('http://localhost:8000/api/tests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ...testData,
-          questions: questions
-        })
+          attemptType,
+          maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
+          scheduledStart: localToUtc(testData.scheduledStart),
+          scheduledEnd: localToUtc(testData.scheduledEnd),
+          questions,
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to create test');
+      if (!res.ok) throw new Error('Failed to create test');
 
-      alert('Test Created Successfully!');
+      alert('Test created successfully');
+      setHasUnsavedChanges(false);
       navigate('/dashboard');
-    } catch (error) {
-      alert(error.message);
+    } catch (err) {
+      alert(err.message);
     }
   };
 
   return (
     <div className="container mx-auto p-6 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-6">Create New Test</h1>
+      <h1 className="text-3xl font-bold mb-6">Create Test</h1>
+        {/* --- AI PDF IMPORT SECTION --- */}
+<div className="bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-lg mb-8 flex flex-col sm:flex-row items-center justify-between shadow-sm">
+  <div className="mb-4 sm:mb-0">
+    <h3 className="font-bold text-blue-800 text-lg flex items-center">
+      <span className="text-2xl mr-2">✨</span> Auto-Import
+    </h3>
+    <p className="text-sm text-blue-600 mt-1">
+      Upload a PDF quiz. We’ll extract questions & answers for you to review.
+    </p>
+  </div>
 
-      {/* --- AI IMPORT SECTION --- */}
-      <div className="bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-lg mb-8 flex flex-col sm:flex-row items-center justify-between shadow-sm">
-        <div className="mb-4 sm:mb-0">
-          <h3 className="font-bold text-blue-800 text-lg flex items-center">
-            <span className="text-2xl mr-2">✨</span> Auto-Import
-          </h3>
-          <p className="text-sm text-blue-600 mt-1">
-            Upload a PDF quiz. We'll extract questions & answers for you to review.
-          </p>
-        </div>
-        <div className="relative group">
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileUpload}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-            disabled={isUploading}
-          />
-          <button
-            className={`
-              flex items-center gap-2 px-6 py-3 rounded-lg font-semibold shadow transition-all transform
-              ${isUploading
-                ? 'bg-gray-400 text-gray-100 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md active:scale-95'}
-            `}
-          >
-            {isUploading ? (
-              <>Processing...</>
-            ) : (
-              <>
-                <span>📂</span> Upload PDF
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
+  <div className="relative group">
+    <input
+      type="file"
+      accept="application/pdf"
+      onChange={handleFileUpload}
+      disabled={isUploading}
+      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+    />
+    <button
+      type="button"
+      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold shadow transition-all transform
+        ${
+          isUploading
+            ? 'bg-gray-400 text-gray-100 cursor-not-allowed'
+            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md active:scale-95'
+        }`}
+    >
+      {isUploading ? 'Processing…' : '📂 Upload PDF'}
+    </button>
+  </div>
+</div>
+ 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Test Info */}
+
+        {/* TEST DETAILS */}
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
           <h2 className="text-xl font-semibold">Test Details</h2>
-          <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
-          <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600">Duration (minutes)</label>
-              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
-            </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Test Name
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              name="title"
+              value={testData.title}
+              onChange={handleTestChange}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Description
+            </label>
+            <textarea
+              className="w-full p-2 border rounded"
+              name="description"
+              placeholder="Description"
+              value={testData.description}
+              onChange={handleTestChange}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Duration (minutes)
+            </label>
+            <input
+              type="number"
+              min="1"
+              className="w-full p-2 border rounded"
+              name="duration"
+              value={testData.duration}
+              onChange={handleTestChange}
+              required
+            />
+          </div>
+          {/* ATTEMPT SETTINGS */}
+<div className="mt-4">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Allowed Attempts
+  </label>
+
+  <div className="flex gap-6 items-center">
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'ONCE'}
+        onChange={() => setAttemptType('ONCE')}
+      />
+      One attempt
+    </label>
+
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'LIMITED'}
+        onChange={() => setAttemptType('LIMITED')}
+      />
+      Limited
+    </label>
+
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'UNLIMITED'}
+        onChange={() => setAttemptType('UNLIMITED')}
+      />
+      Unlimited
+    </label>
+  </div>
+
+  {attemptType === 'LIMITED' && (
+    <input
+      type="number"
+      min={1}
+      className="mt-2 w-32 border rounded p-2"
+      value={maxAttempts}
+      onChange={(e) => setMaxAttempts(Number(e.target.value))}
+    />
+  )}
+</div>
 
 
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Start Window (Optional)</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">End Window (Optional)</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
-            </div>
+          {/* START TIME */}
+          <div className="relative">
+            <label className="block text-sm text-gray-600 mb-1">
+              Start Time
+            </label>
+            <input
+              type="datetime-local"
+              className="w-full p-2 border rounded pr-16"
+              name="scheduledStart"
+              value={testData.scheduledStart}
+              onChange={(e) => {
+                handleTestChange(e);
+                setShowStartOk(true);
+              }}
+            />
+            {showStartOk && (
+              <button
+                type="button"
+                className="absolute right-2 top-8 px-3 py-1 bg-green-600 text-white text-sm rounded"
+                onClick={() => setShowStartOk(false)}
+              >
+                OK
+              </button>
+            )}
+          </div>
+
+          {/* END TIME */}
+          <div className="relative">
+            <label className="block text-sm text-gray-600 mb-1">
+              End Time
+            </label>
+            <input
+              type="datetime-local"
+              className="w-full p-2 border rounded pr-16"
+              name="scheduledEnd"
+              value={testData.scheduledEnd}
+              onChange={(e) => {
+                handleTestChange(e);
+                setShowEndOk(true);
+              }}
+            />
+            {showEndOk && (
+              <button
+                type="button"
+                className="absolute right-2 top-8 px-3 py-1 bg-green-600 text-white text-sm rounded"
+                onClick={() => setShowEndOk(false)}
+              >
+                OK
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Questions List */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-end">
-            <h2 className="text-xl font-semibold">Questions ({questions.length})</h2>
-          </div>
+        {/* QUESTIONS */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold">Questions</h2>
 
-          {questions.map((q, qIndex) => (
-            <div key={qIndex} className="bg-white p-6 rounded-lg shadow-md border border-gray-200 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium bg-gray-100 px-3 py-1 rounded text-sm">Question {qIndex + 1}</h3>
-                <button type="button" onClick={() => removeQuestion(qIndex)} className="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
-              </div>
+          {questions.map((q, qi) => (
+            <div key={qi} className="bg-white p-6 rounded-lg shadow-md relative">
+              <button
+                type="button"
+                onClick={() => removeQuestion(qi)}
+                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+              >
+                🗑️
+              </button>
 
+              <label className="block text-sm text-gray-600 mb-1">
+                Question {qi + 1}
+              </label>
               <input
-                className="w-full p-3 border rounded mb-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Enter Question Text"
+                className="w-full p-2 border rounded mb-3"
                 value={q.text}
-                required
-                onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
+                onChange={(e) =>
+                  handleQuestionChange(qi, 'text', e.target.value)
+                }
               />
 
-              <div className="mb-4 pl-4 border-l-2 border-gray-200">
-                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Options</p>
-                {q.options.map((opt, oIndex) => (
-                  <div key={oIndex} className="flex gap-2 mb-2">
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-xs font-bold text-gray-600">
-                      {String.fromCharCode(65 + oIndex)}
-                    </div>
-                    <input
-                      className="grow p-2 border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-400 outline-none"
-                      placeholder={`Option ${oIndex + 1}`}
-                      value={opt}
-                      required
-                      onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
-                    />
-                    <button type="button" onClick={() => removeOption(qIndex, oIndex)} className="text-red-400 hover:text-red-600 px-2 text-lg">×</button>
-                  </div>
-                ))}
-                <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline mt-1 ml-8">+ Add Option</button>
-              </div>
+              {q.options.map((opt, oi) => (
+                <div key={oi} className="flex gap-2 mb-2">
+                  <input
+                    className="grow p-2 border rounded"
+                    placeholder={`Option ${oi + 1}`}
+                    value={opt}
+                    onChange={(e) =>
+                      handleOptionChange(qi, oi, e.target.value)
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="text-red-500"
+                    onClick={() => removeOption(qi, oi)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
 
-              <div>
-                <label className="text-xs font-bold text-green-600 uppercase block mb-1">Correct Answer</label>
-                <input
-                  className="w-full p-2 border rounded border-green-200 bg-green-50 focus:ring-1 focus:ring-green-500 outline-none"
-                  placeholder="Paste the correct answer here (must match an option exactly)"
+              <button
+                type="button"
+                className="text-blue-600 text-sm"
+                onClick={() => addOption(qi)}
+              >
+                + Add Option
+              </button>
+
+              <div className="mt-3">
+                <label className="block text-sm text-gray-600 mb-1">
+                  Correct Answer
+                </label>
+                <select
+                  className="w-full p-2 border rounded"
                   value={q.correctAnswer}
+                  onChange={(e) =>
+                    handleQuestionChange(qi, 'correctAnswer', e.target.value)
+                  }
                   required
-                  onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}
-                />
-                <p className="text-xs text-gray-400 mt-1">Make sure this text matches one of the options above exactly.</p>
+                >
+                  <option value="">Select correct answer</option>
+                  {q.options.map((opt, oi) => (
+                    <option key={oi} value={opt}>
+                      {opt || `Option ${oi + 1}`}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           ))}
+
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            + Add Question
+          </button>
         </div>
 
-        <div className="flex gap-4 pt-4 border-t">
-          <button type="button" onClick={addQuestion} className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition">+ Add Blank Question</button>
-          <button type="submit" className="grow px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg transition transform active:scale-95">Save Test</button>
+        {/* ACTION BUTTONS */}
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                !hasUnsavedChanges ||
+                window.confirm('You have unsaved changes. Discard them?')
+              ) {
+                navigate('/dashboard');
+              }
+            }}
+            className="w-1/3 bg-gray-200 py-3 rounded hover:bg-gray-300 cursor-pointer"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="w-2/3 bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
+          >
+            Create Test
+          </button>
         </div>
       </form>
     </div>
