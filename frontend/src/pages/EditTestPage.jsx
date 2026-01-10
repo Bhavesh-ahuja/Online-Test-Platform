@@ -17,9 +17,10 @@ function EditTestPage() {
 
   const [questions, setQuestions] = useState([]);
 
-  // UI-only state for floating OK buttons
+  // UI state
   const [showStartOk, setShowStartOk] = useState(false);
   const [showEndOk, setShowEndOk] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     const fetchTest = async () => {
@@ -55,29 +56,38 @@ function EditTestPage() {
     fetchTest();
   }, [id, navigate]);
 
-  const handleTestChange = (e) =>
+  const markDirty = () => setHasUnsavedChanges(true);
+
+  const handleTestChange = (e) => {
     setTestData({ ...testData, [e.target.name]: e.target.value });
+    markDirty();
+  };
 
   const handleQuestionChange = (qi, field, value) => {
     const copy = [...questions];
     copy[qi][field] = value;
     setQuestions(copy);
-    if (copy[qi].correctAnswer === copy[qi].options[oi]) {
-  copy[qi].correctAnswer = value;
-}
-
+    markDirty();
   };
 
   const handleOptionChange = (qi, oi, value) => {
     const copy = [...questions];
+
+    // sync correctAnswer if option text changes
+    if (copy[qi].correctAnswer === copy[qi].options[oi]) {
+      copy[qi].correctAnswer = value;
+    }
+
     copy[qi].options[oi] = value;
     setQuestions(copy);
+    markDirty();
   };
 
   const addOption = (qi) => {
     const copy = [...questions];
     copy[qi].options.push('');
     setQuestions(copy);
+    markDirty();
   };
 
   const removeOption = (qi, oi) => {
@@ -85,61 +95,64 @@ function EditTestPage() {
     if (copy[qi].options.length <= 2) return;
     copy[qi].options.splice(oi, 1);
     setQuestions(copy);
+    markDirty();
   };
-    
-   const addQuestion = () => {
-  setQuestions([
-    ...questions,
-    {
-      text: '',
-      type: 'MCQ',
-      options: ['', ''],
-      correctAnswer: ''
-    }
-   ]);
+
+  const addQuestion = () => {
+    setQuestions([
+      ...questions,
+      { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' },
+    ]);
+    markDirty();
   };
 
   const removeQuestion = (qi) => {
-  if (questions.length === 1) {
-  alert('At least one question is required');
-  return;
-}
-
-  setQuestions(questions.filter((_, index) => index !== qi));
+    if (questions.length === 1) {
+      alert('At least one question is required');
+      return;
+    }
+    setQuestions(questions.filter((_, index) => index !== qi));
+    markDirty();
   };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     for (const q of questions) {
-     if (!q.correctAnswer) {
-    alert('Each question must have a correct answer');
+  if (!q.text || q.text.trim() === '') {
+    alert('Question text cannot be empty');
     return;
+  }
+}
+
+
+    for (const q of questions) {
+      if (!q.correctAnswer) {
+        alert('Each question must have a correct answer');
+        return;
       }
-     }
+    }
+
+    const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(
-        `http://localhost:8000/api/tests/${id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            ...testData,
-            scheduledStart: localToUtc(testData.scheduledStart),
-            scheduledEnd: localToUtc(testData.scheduledEnd),
-            questions,
-          }),
-        }
-      );
+      const res = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...testData,
+          scheduledStart: localToUtc(testData.scheduledStart),
+          scheduledEnd: localToUtc(testData.scheduledEnd),
+          questions,
+        }),
+      });
 
       if (!res.ok) throw new Error('Failed to update test');
 
       alert('Test updated successfully');
+      setHasUnsavedChanges(false);
       navigate('/dashboard');
     } catch (err) {
       alert(err.message);
@@ -159,9 +172,7 @@ function EditTestPage() {
           <h2 className="text-xl font-semibold">Test Details</h2>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              Test Name
-            </label>
+            <label className="block text-sm text-gray-600 mb-1">Test Name</label>
             <input
               className="w-full p-2 border rounded"
               name="title"
@@ -172,9 +183,7 @@ function EditTestPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              Description
-            </label>
+            <label className="block text-sm text-gray-600 mb-1">Description</label>
             <textarea
               className="w-full p-2 border rounded"
               name="description"
@@ -190,6 +199,7 @@ function EditTestPage() {
             </label>
             <input
               type="number"
+              min="1"
               className="w-full p-2 border rounded"
               name="duration"
               value={testData.duration}
@@ -200,9 +210,7 @@ function EditTestPage() {
 
           {/* START TIME */}
           <div className="relative">
-            <label className="block text-sm text-gray-600 mb-1">
-              Start Time
-            </label>
+            <label className="block text-sm text-gray-600 mb-1">Start Time</label>
             <input
               type="datetime-local"
               className="w-full p-2 border rounded pr-16"
@@ -212,7 +220,6 @@ function EditTestPage() {
                 handleTestChange(e);
                 setShowStartOk(true);
               }}
-              onFocus={() => setShowStartOk(true)}
             />
             {showStartOk && (
               <button
@@ -227,9 +234,7 @@ function EditTestPage() {
 
           {/* END TIME */}
           <div className="relative">
-            <label className="block text-sm text-gray-600 mb-1">
-              End Time
-            </label>
+            <label className="block text-sm text-gray-600 mb-1">End Time</label>
             <input
               type="datetime-local"
               className="w-full p-2 border rounded pr-16"
@@ -239,7 +244,6 @@ function EditTestPage() {
                 handleTestChange(e);
                 setShowEndOk(true);
               }}
-              onFocus={() => setShowEndOk(true)}
             />
             {showEndOk && (
               <button
@@ -258,17 +262,13 @@ function EditTestPage() {
           <h2 className="text-xl font-semibold">Questions</h2>
 
           {questions.map((q, qi) => (
-             <div key={qi} className="bg-white p-6 rounded-lg shadow-md relative">
-    
+            <div key={qi} className="bg-white p-6 rounded-lg shadow-md relative">
               <button
-            type="button"
-                  onClick={() => removeQuestion(qi)}
-                 className="absolute top-3 right-3 flex items-center justify-center
-             w-9 h-9 rounded-full bg-red-100 text-red-600
-             hover:bg-red-200 hover:text-red-800"
-               title="Delete Question"
-                   >
-                       🗑️
+                type="button"
+                onClick={() => removeQuestion(qi)}
+                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+              >
+                🗑️
               </button>
 
               <label className="block text-sm text-gray-600 mb-1">
@@ -301,6 +301,7 @@ function EditTestPage() {
                   </button>
                 </div>
               ))}
+
               <button
                 type="button"
                 className="text-blue-600 text-sm"
@@ -310,51 +311,61 @@ function EditTestPage() {
               </button>
 
               <div className="mt-3">
-               <label className="block text-sm text-gray-600 mb-1">
-    Correct Answer
-                 </label>
-
-                 <select
-                     className="w-full p-2 border rounded"
-                      value={q.correctAnswer}
-                         onChange={(e) =>
-                           handleQuestionChange(qi, 'correctAnswer', e.target.value)
-                         }
-                          required
-  >
-                          <option value="">Select correct answer</option>
-                         {q.options.map((opt, oi) => (
-                          <option key={oi} value={opt}>
-                     {opt || `Option ${oi + 1}`}
-                     </option>
-                      ))}
-                   </select>
-                  </div>
-
-
-              
-
-              <div className="mt-3 bg-green-50 border border-green-200 p-2 rounded">
-                Correct Answer: <b>{q.correctAnswer}</b>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Correct Answer
+                </label>
+                <select
+                  className="w-full p-2 border rounded"
+                  value={q.correctAnswer}
+                  onChange={(e) =>
+                    handleQuestionChange(qi, 'correctAnswer', e.target.value)
+                  }
+                  required
+                >
+                  <option value="">Select correct answer</option>
+                  {q.options.map((opt, oi) => (
+                    <option key={oi} value={opt}>
+                      {opt || `Option ${oi + 1}`}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           ))}
-          <button
-             type="button"
-              onClick={addQuestion}
-             className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                 >
-             + Add Question
-              </button>
 
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            + Add Question
+          </button>
         </div>
-            
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-3 rounded"
-        >
-          Update Test
-        </button>
+
+        {/* ACTION BUTTONS */}
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                !hasUnsavedChanges ||
+                window.confirm('You have unsaved changes. Discard them?')
+              ) {
+                navigate('/dashboard');
+              }
+            }}
+            className="w-1/3 bg-gray-200 py-3 rounded"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="w-2/3 bg-blue-600 text-white py-3 rounded"
+          >
+            Update Test
+          </button>
+        </div>
       </form>
     </div>
   );
