@@ -6,6 +6,9 @@ function EditTestPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  // ATTEMPT CONFIG (ADD ONLY)
+const [attemptType, setAttemptType] = useState('ONCE');
+const [maxAttempts, setMaxAttempts] = useState(1);
 
   const [testData, setTestData] = useState({
     title: '',
@@ -43,6 +46,11 @@ function EditTestPage() {
           scheduledStart: utcToLocal(data.scheduledStart),
           scheduledEnd: utcToLocal(data.scheduledEnd),
         });
+         // LOAD ATTEMPT CONFIG (ADD ONLY)
+          setAttemptType(data.attemptType || 'ONCE');
+          setMaxAttempts(data.maxAttempts || 1);
+
+
 
         setQuestions(data.questions);
       } catch (err) {
@@ -143,9 +151,13 @@ function EditTestPage() {
         },
         body: JSON.stringify({
           ...testData,
+          attemptType,
+          maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
+
           scheduledStart: localToUtc(testData.scheduledStart),
           scheduledEnd: localToUtc(testData.scheduledEnd),
           questions,
+
         }),
       });
 
@@ -207,6 +219,52 @@ function EditTestPage() {
               required
             />
           </div>
+             {/* Allowed Attempts */}
+<div className="mt-4">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Allowed Attempts
+  </label>
+
+  <div className="flex gap-6 items-center">
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'ONCE'}
+        onChange={() => setAttemptType('ONCE')}
+      />
+      One attempt
+    </label>
+
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'LIMITED'}
+        onChange={() => setAttemptType('LIMITED')}
+      />
+      Limited
+    </label>
+
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        checked={attemptType === 'UNLIMITED'}
+        onChange={() => setAttemptType('UNLIMITED')}
+      />
+      Unlimited
+    </label>
+  </div>
+
+  {attemptType === 'LIMITED' && (
+    <input
+      type="number"
+      min={1}
+      className="mt-2 w-32 border rounded p-2"
+      value={maxAttempts}
+      onChange={(e) => setMaxAttempts(Number(e.target.value))}
+    />
+  )}
+</div>
+
 
           {/* START TIME */}
           <div className="relative">

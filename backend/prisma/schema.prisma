@@ -12,6 +12,12 @@ enum Role {
   STUDENT
 }
 
+enum AttemptType {
+  ONCE
+  LIMITED
+  UNLIMITED
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -20,26 +26,27 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tests        Test[]
+  testsCreated Test[]           @relation("CreatedTests")
   submissions  TestSubmission[]
 }
 
 model Test {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  duration    Int
-
-  // ✅ ONLY ADDITION (THIS FIXES YOUR ERROR)
+  id             Int       @id @default(autoincrement())
+  title          String
+  description    String?
+  duration       Int
   scheduledStart DateTime?
   scheduledEnd   DateTime?
+  createdAt      DateTime  @default(now())
 
-  createdAt   DateTime @default(now())
+  attemptType AttemptType @default(ONCE)
+  maxAttempts Int?
+
   createdById Int
-  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdBy   User @relation("CreatedTests", fields: [createdById], references: [id])
 
-  questions    Question[]
-  submissions  TestSubmission[]
+  questions   Question[]
+  submissions TestSubmission[]
 }
 
 model Question {
@@ -49,34 +56,36 @@ model Question {
   options       String[]
   correctAnswer String
 
-  testId  Int
-  test    Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testId Int
+  test   Test @relation(fields: [testId], references: [id])
 
-  answers Answer[]
+  answers Answer[] // ✅ FIXED: opposite relation added
 }
 
 model TestSubmission {
-  id         Int      @id @default(autoincrement())
-  testId     Int
-  studentId Int
-  score      Int
-  status     String
+  id        Int      @id @default(autoincrement())
+  status    String
+  score     Int
   createdAt DateTime @default(now())
 
-  test    Test @relation(fields: [testId], references: [id])
-  student User @relation(fields: [studentId], references: [id])
+  testId Int
+  test   Test @relation(fields: [testId], references: [id])
+
+  studentId Int
+  student   User @relation(fields: [studentId], references: [id])
 
   answers Answer[]
 }
 
 model Answer {
-  id             Int      @id @default(autoincrement())
   selectedAnswer String
   isCorrect      Boolean
 
-  questionId   Int
-  submissionId Int
+  questionId Int
+  question   Question @relation(fields: [questionId], references: [id])
 
-  question   Question       @relation(fields: [questionId], references: [id])
-  submission TestSubmission @relation(fields: [submissionId], references: [id])
+  submissionId Int
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
+
+  @@id([submissionId, questionId])
 }

@@ -13,18 +13,15 @@ function CreateTestPage() {
     scheduledEnd: ''
   });
 
+  const [attemptType, setAttemptType] = useState('ONCE');
+  const [maxAttempts, setMaxAttempts] = useState(1);
+
   const [questions, setQuestions] = useState([
     { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }
   ]);
 
   const handleTestChange = (e) =>
     setTestData({ ...testData, [e.target.name]: e.target.value });
-
-  const handleQuestionChange = (i, f, v) => {
-    const q = [...questions];
-    q[i][f] = v;
-    setQuestions(q);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,6 +36,8 @@ function CreateTestPage() {
         },
         body: JSON.stringify({
           ...testData,
+          attemptType,
+          maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
           scheduledStart: localToUtc(testData.scheduledStart),
           scheduledEnd: localToUtc(testData.scheduledEnd),
           questions
@@ -60,8 +59,8 @@ function CreateTestPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-          <input
-            className="w-full p-2 border rounded"
+
+          <input className="w-full p-2 border rounded"
             placeholder="Test Title"
             name="title"
             required
@@ -69,33 +68,57 @@ function CreateTestPage() {
             onChange={handleTestChange}
           />
 
-          <textarea
-            className="w-full p-2 border rounded"
+          <textarea className="w-full p-2 border rounded"
             placeholder="Description"
             name="description"
             value={testData.description}
             onChange={handleTestChange}
           />
 
-          <input
-            type="number"
+          <input type="number"
             className="w-full p-2 border rounded"
             name="duration"
-            required
             value={testData.duration}
             onChange={handleTestChange}
           />
 
-          <input
-            type="datetime-local"
+          {/* ATTEMPT SETTINGS */}
+          <div>
+            <label className="font-semibold">Allowed Attempts</label>
+            <div className="space-y-2 mt-2">
+              <label>
+                <input type="radio" checked={attemptType === 'ONCE'}
+                  onChange={() => setAttemptType('ONCE')} /> One attempt
+              </label>
+
+              <label>
+                <input type="radio" checked={attemptType === 'LIMITED'}
+                  onChange={() => setAttemptType('LIMITED')} /> Limited
+              </label>
+
+              {attemptType === 'LIMITED' && (
+                <input type="number" min={1}
+                  className="border p-2 rounded w-full"
+                  value={maxAttempts}
+                  onChange={e => setMaxAttempts(e.target.value)}
+                />
+              )}
+
+              <label>
+                <input type="radio" checked={attemptType === 'UNLIMITED'}
+                  onChange={() => setAttemptType('UNLIMITED')} /> Unlimited
+              </label>
+            </div>
+          </div>
+
+          <input type="datetime-local"
             className="w-full p-2 border rounded"
             name="scheduledStart"
             value={testData.scheduledStart}
             onChange={handleTestChange}
           />
 
-          <input
-            type="datetime-local"
+          <input type="datetime-local"
             className="w-full p-2 border rounded"
             name="scheduledEnd"
             value={testData.scheduledEnd}
@@ -103,10 +126,7 @@ function CreateTestPage() {
           />
         </div>
 
-        <button
-          type="submit"
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded"
-        >
+        <button className="w-full bg-blue-600 text-white py-2 rounded">
           Create Test
         </button>
       </form>
