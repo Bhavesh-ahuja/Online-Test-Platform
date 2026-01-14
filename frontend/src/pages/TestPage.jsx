@@ -7,6 +7,10 @@ import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based o
 ---------------------------------------------------------*/
 const MAX_WARNINGS = 3;
 
+const getAutosaveKey = (testId, submissionId) =>
+  `autosave:test:${testId}:${submissionId}`;
+
+
 // Question Status Constants
 const STATUS = {
   NOT_VISITED: 'not_visited',
@@ -61,27 +65,26 @@ function WarningBanner({ count }) {
 function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, markedQuestions, visitedQuestions, onJump }) {
   // Helper to determine color class
   const getButtonClass = (index) => {
-    const questionId = index; // using index as ID for simplicity in palette mapping
-    const isCurrent = index === currentQuestionIndex;
+  const isCurrent = index === currentQuestionIndex;
+  const isAnswered = answers[index] !== undefined;
+  const isMarked = markedQuestions.includes(index);
+  const isVisited = visitedQuestions.includes(index);
 
-    // Status Logic
-    const isAnswered = answers[index] !== undefined; // Check if we have an answer for this index
-    const isMarked = markedQuestions.includes(index);
-    const isVisited = visitedQuestions.includes(index);
+  let baseClass =
+    "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
 
-    let baseClass = "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
+  if (isCurrent) {
+    return baseClass + "ring-2 ring-offset-2 ring-blue-500 bg-blue-100";
+  }
+  if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white";
+  if (isMarked) return baseClass + "bg-purple-200";
+  if (isAnswered) return baseClass + "bg-green-500 text-white";
+  if (isVisited) return baseClass + "bg-red-100";
 
-    if (isCurrent) {
-      return baseClass + "ring-2 ring-offset-2 ring-blue-500 border-blue-600 bg-blue-100 text-blue-800";
-    }
+  return baseClass + "bg-gray-100";
+};
 
-    if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white border-purple-700"; // Marked & Answered
-    if (isMarked) return baseClass + "bg-purple-200 text-purple-800 border-purple-300"; // Marked for Review
-    if (isAnswered) return baseClass + "bg-green-500 text-white border-green-600"; // Answered
-    if (isVisited) return baseClass + "bg-red-100 text-red-800 border-red-300"; // Visited (Not Answered)
-
-    return baseClass + "bg-gray-100 text-gray-600 border-gray-300"; // Not Visited
-  };
+  
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 h-full border border-gray-200">
@@ -121,6 +124,8 @@ function TestPage() {
   const [test, setTest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [submissionId, setSubmissionId] = useState(null);
+
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
@@ -132,6 +137,24 @@ function TestPage() {
   const [answers, setAnswers] = useState({}); // { index: "Option A" }
   const [markedQuestions, setMarkedQuestions] = useState([]); // [0, 5, 8] (Indices)
   const [visitedQuestions, setVisitedQuestions] = useState([0]); // [0, 1, 2] (Indices)
+    
+     useEffect(() => {
+  if (!submissionId) return;
+
+  const interval = setInterval(() => {
+    const autosaveKey = getAutosaveKey(id, submissionId);
+    localStorage.setItem(
+      autosaveKey,
+      JSON.stringify({
+        answers,
+        markedQuestions,
+        updatedAt: Date.now(),
+      })
+    );
+  }, 10000);
+
+  return () => clearInterval(interval);
+}, [answers, markedQuestions, submissionId, id]);
 
   // --- 1. Fetch & Init ---
   useEffect(() => {
@@ -171,6 +194,27 @@ function TestPage() {
         }
 
         const sessionData = await startRes.json();
+        setSubmissionId(sessionData.submissionId);
+        const autosaveKey = `autosave:test:${id}:${sessionData.submissionId}`;
+        const saved = localStorage.getItem(autosaveKey);
+
+            if (saved) {
+           try {
+            const parsed = JSON.parse(saved);
+            if (parsed.answers) {
+               setAnswers(parsed.answers);
+                }
+            if (parsed.markedQuestions) {
+                   setMarkedQuestions(parsed.markedQuestions);
+              }
+                  }          catch (e) {
+               console.warn("Failed to restore autosave", e);
+                    }
+          }
+
+
+  
+
 
         // Step C: Calculate Remaining Time based on SERVER start time
         const startTime = new Date(sessionData.startTime).getTime();
@@ -213,15 +257,20 @@ function TestPage() {
 
   // --- 3. Interaction Handlers ---
   const handleAnswerSelect = (option) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestionIndex]: option
-    }));
-  };
+  const questionId = test.questions[currentQuestionIndex].id;
+
+  setAnswers(prev => ({
+    ...prev,
+    [questionId]: option
+  }));
+};
+
 
   const handleClearResponse = () => {
     const newAnswers = { ...answers };
-    delete newAnswers[currentQuestionIndex];
+    const questionId = test.questions[currentQuestionIndex].id;
+    delete newAnswers[questionId];
+
     setAnswers(newAnswers);
   };
 
@@ -234,18 +283,17 @@ function TestPage() {
   };
 
   // --- 4. Submission Logic ---
-  const handleSubmit = useCallback(async (status = 'COMPLETED') => {
+  const handleSubmit = useCallback(
+  async (status = 'COMPLETED') => {
     if (loading) return;
+
     const token = localStorage.getItem('token');
 
-    // Map our local "Index-based" answers back to "ID-based" for the backend
-    // Backend expects: { "questionID_123": "Option A" }
     const formattedAnswers = {};
-
     if (test && test.questions) {
-      test.questions.forEach((q, index) => {
-        if (answers[index]) {
-          formattedAnswers[q.id] = answers[index];
+      test.questions.forEach((q) => {
+        if (answers[q.id]) {
+          formattedAnswers[q.id] = answers[q.id];
         }
       });
     }
@@ -259,18 +307,31 @@ function TestPage() {
         },
         body: JSON.stringify({
           answers: formattedAnswers,
-          status: status
+          status,
         }),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to submit');
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit');
+      }
 
+      // ✅ clear autosave ONLY after successful submit
+      if (submissionId) {
+        const autosaveKey = getAutosaveKey(id, submissionId);
+        localStorage.removeItem(autosaveKey);
+      }
+
+      // ✅ single navigation (no duplicate)
       navigate(`/results/${data.submissionId}`);
     } catch (err) {
       alert('Error submitting test: ' + err.message);
     }
-  }, [id, answers, navigate, loading, test]);
+  },
+  [id, answers, navigate, loading, test, submissionId]
+);
+
+    
 
   // --- 5. Effects (Timer, Auto-Submit, Tab Detection) ---
 
@@ -358,29 +419,29 @@ function TestPage() {
               {currentQuestion.text}
             </p>
           </div>
+{/* Options */}
+<div className="space-y-3 mb-8">
+  {currentQuestion.options.map((option, index) => (
+    <label
+      key={index}
+      className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
+        ${answers[currentQuestion.id] === option
+          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+          : 'border-gray-200 bg-white'}`}
+    >
+      <input
+        type="radio"
+        name={`question_${currentQuestion.id}`}
+        value={option}
+        checked={answers[currentQuestion.id] === option}
+        onChange={() => handleAnswerSelect(option)}
+        className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300"
+      />
+      <span className="ml-3 text-gray-700 font-medium">{option}</span>
+    </label>
+  ))}
+</div>
 
-          {/* Options */}
-          <div className="space-y-3 mb-8">
-            {currentQuestion.options.map((option, index) => (
-              <label
-                key={index}
-                className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
-                  ${answers[currentQuestionIndex] === option
-                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                    : 'border-gray-200 bg-white'}`}
-              >
-                <input
-                  type="radio"
-                  name={`question_${currentQuestionIndex}`}
-                  value={option}
-                  checked={answers[currentQuestionIndex] === option}
-                  onChange={() => handleAnswerSelect(option)}
-                  className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-3 text-gray-700 font-medium">{option}</span>
-              </label>
-            ))}
-          </div>
 
           {/* Action Buttons */}
           <div className="mt-auto pt-6 border-t flex justify-between items-center">
@@ -441,13 +502,14 @@ function TestPage() {
         {/* Right: Question Palette (25%) */}
         <div className="w-1/4 p-4 bg-gray-100 border-l border-gray-200 overflow-y-auto">
           <QuestionPalette
-            totalQuestions={test.questions.length}
-            currentQuestionIndex={currentQuestionIndex}
-            answers={answers}
-            markedQuestions={markedQuestions}
+         totalQuestions={test.questions.length}
+           currentQuestionIndex={currentQuestionIndex}
+        answers={answers}
+           markedQuestions={markedQuestions}
             visitedQuestions={visitedQuestions}
-            onJump={handleJump}
+           onJump={handleJump}
           />
+
         </div>
 
       </div>
