@@ -16,6 +16,7 @@ import {
 import multer from "multer";
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
 import { getTestByIdForAdmin } from '../controllers/test.controller.js';
+import { authenticateExamSession } from '../middleware/examSessionAuth.js';
 
 const router = express.Router();
 
@@ -58,7 +59,8 @@ router.get('/my-submissions', authenticateToken, getMySubmissions);
  */
 
 // GET /api/tests/:id - Get test details by ID
-router.get('/:id', authenticateToken, getTestById);
+router.get('/:id', authenticateExamSession, getTestById);
+
 
 // PUT /api/tests/:id - Admin only: Update test
 router.put('/:id', authenticateToken, isAdmin, updateTest);
@@ -69,10 +71,8 @@ router.delete('/:id', authenticateToken, isAdmin, deleteTest);
 // POST /api/tests/:id/start - Start a test
 router.post('/:id/start', authenticateToken, startTest);
 
-// POST /api/tests/:id/submit - Submit test answers
-router.post('/:id/submit', authenticateToken, submitTest);
-
-router.patch('/:id/autosave', authenticateToken, autosaveTestProgress);
+router.patch('/:id/autosave', authenticateExamSession, autosaveTestProgress);
+router.post('/:id/submit', authenticateExamSession, submitTest);
 
 
 /**

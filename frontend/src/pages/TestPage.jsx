@@ -163,15 +163,17 @@ useEffect(() => {
   if (!submissionId) return;
 
   const interval = setInterval(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    const examToken = sessionStorage.getItem('examSessionToken');
+
+    if (!examToken) return;
+
 
     try {
       await fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${examToken}`
         },
         body: JSON.stringify({
           submissionId,
@@ -191,26 +193,20 @@ useEffect(() => {
   // --- 1. Fetch & Init ---
   useEffect(() => {
     const initTest = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return navigate('/login');
+    const loginToken = localStorage.getItem('token');
+    if (!loginToken) {
+     navigate('/login');
+     return;
+     }
 
       try {
         // Step A: Fetch Test Content
-        const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!testRes.ok) throw new Error('Failed to fetch test data');
-        const data = await testRes.json();
-
-        if (data.questions && Array.isArray(data.questions)) {
-          data.questions = shuffleArray(data.questions);
-        }
-        setTest(data);
+        
 
         // Step B: Start/Resume Test Session (Get Start Time & Verify Schedule)
         const startRes = await fetch(`http://localhost:8000/api/tests/${id}/start`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${loginToken}` },
         });
 
         if (!startRes.ok) {
@@ -226,6 +222,29 @@ useEffect(() => {
         }
 
         const sessionData = await startRes.json();
+        sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
+         // Step B: Fetch Test Content (AFTER exam session starts)
+         const examToken = sessionStorage.getItem('examSessionToken');
+
+        const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
+           headers: {
+             Authorization: `Bearer ${examToken || loginToken}`,
+             },
+          });
+
+
+        if (!testRes.ok) {
+            throw new Error('Failed to fetch test data');
+         }
+
+           const data = await testRes.json();
+
+          if (data.questions && Array.isArray(data.questions)) {
+  data.questions = shuffleArray(data.questions);
+              }
+
+               setTest(data);
+ 
         setSubmissionId(sessionData.submissionId);
         const autosaveKey = `autosave:test:${id}:${sessionData.submissionId}`;
         const saved = localStorage.getItem(autosaveKey);
@@ -324,9 +343,11 @@ useEffect(() => {
   // --- 4. Submission Logic ---
   const handleSubmit = useCallback(
   async (status = 'COMPLETED') => {
+    const examToken = sessionStorage.getItem('examSessionToken');
+
     if (loading) return;
 
-    const token = localStorage.getItem('token');
+   
 
     const formattedAnswers = {};
     if (test && test.questions) {
@@ -339,10 +360,11 @@ useEffect(() => {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
+      
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${examToken}`,
         },
         body: JSON.stringify({
           answers: formattedAnswers,
@@ -350,7 +372,17 @@ useEffect(() => {
         }),
       });
 
-      const data = await response.json();
+      let data;
+const contentType = response.headers.get('content-type');
+
+if (contentType && contentType.includes('application/json')) {
+  data = await response.json();
+} else {
+  const text = await response.text();
+  throw new Error(text || 'Submit failed');
+}
+
+      
       if (!response.ok) {
         throw new Error(data.error || 'Failed to submit');
       }

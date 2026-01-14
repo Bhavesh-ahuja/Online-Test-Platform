@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { createExamSessionToken } from '../lib/examSessionToken.js';
+
 
 /* =========================
    CREATE TEST
@@ -175,11 +177,25 @@ export const startTest = async (req, res) => {
       });
     }
 
+    
+
+    const durationInSeconds = test.duration * 60;
+    const bufferInSeconds = 15 * 60; // 15 min buffer
+
+    const examSessionToken = createExamSessionToken({
+    submissionId: submission.id,
+     testId: test.id,
+    studentId: submission.studentId,
+     expiresInSeconds: durationInSeconds + bufferInSeconds
+     });
+
     res.json({
       message: 'Test started',
       startTime: submission.createdAt,
-      submissionId: submission.id
+      submissionId: submission.id,
+      examSessionToken
     });
+  
   } catch (error) {
     console.error('Start test error:', error);
     res.status(500).json({ error: 'Failed to start test' });
@@ -254,9 +270,14 @@ export const getTestByIdForAdmin = async (req, res) => {
    SUBMIT TEST
 ========================= */
 export const submitTest = async (req, res) => {
+  if (!req.examSession) {
+  return res.status(401).json({ error: 'Invalid or expired exam session' });
+}
+
   const { id } = req.params;
   const { answers, status } = req.body;
-  const studentId = req.user.userId;
+  const studentId = req.examSession.studentId;
+
 
   try {
     const submission = await prisma.testSubmission.findFirst({
@@ -441,9 +462,11 @@ export const uploadTestPDF = async (req, res) => {
     res.status(500).json({ error: 'Failed to process PDF' });
   }
 };
+
 export const autosaveTestProgress = async (req, res) => {
   try {
-    const studentId = req.user.userId;
+    const studentId = req.examSession.studentId;
+
     const testId = parseInt(req.params.id);
     const { submissionId, answers, markedQuestions } = req.body;
 
