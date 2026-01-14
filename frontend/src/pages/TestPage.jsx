@@ -156,6 +156,36 @@ function TestPage() {
   return () => clearInterval(interval);
 }, [answers, markedQuestions, submissionId, id]);
 
+
+useEffect(() => {
+  if (!submissionId) return;
+
+  const interval = setInterval(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          submissionId,
+          answers,
+          markedQuestions
+        })
+      });
+    } catch {
+      // silent fail – local autosave already protects data
+    }
+  }, 30000); // 30 seconds
+
+  return () => clearInterval(interval);
+}, [submissionId, answers, markedQuestions, id]);
+
+
   // --- 1. Fetch & Init ---
   useEffect(() => {
     const initTest = async () => {
@@ -213,7 +243,11 @@ function TestPage() {
           }
 
 
-  
+          if (!saved && sessionData.answersDraft) {
+            setAnswers(sessionData.answersDraft.answers || {});
+              setMarkedQuestions(sessionData.answersDraft.markedQuestions || []);
+           }
+
 
 
         // Step C: Calculate Remaining Time based on SERVER start time

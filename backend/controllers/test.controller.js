@@ -441,3 +441,43 @@ export const uploadTestPDF = async (req, res) => {
     res.status(500).json({ error: 'Failed to process PDF' });
   }
 };
+export const autosaveTestProgress = async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+    const testId = parseInt(req.params.id);
+    const { submissionId, answers, markedQuestions } = req.body;
+
+    if (!submissionId) {
+      return res.status(400).json({ error: 'submissionId required' });
+    }
+
+    const submission = await prisma.testSubmission.findFirst({
+      where: {
+        id: submissionId,
+        testId,
+        studentId,
+        status: 'IN_PROGRESS'
+      }
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Active submission not found' });
+    }
+
+    await prisma.testSubmission.update({
+      where: { id: submissionId },
+      data: {
+        answersDraft: {
+          answers,
+          markedQuestions,
+          updatedAt: new Date()
+        }
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Autosave error:', error);
+    res.status(500).json({ error: 'Autosave failed' });
+  }
+};

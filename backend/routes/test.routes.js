@@ -11,6 +11,7 @@ import {
   deleteTest,
   uploadTestPDF,
   startTest,
+  autosaveTestProgress,
 } from '../controllers/test.controller.js';
 import multer from "multer";
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
@@ -70,6 +71,9 @@ router.post('/:id/start', authenticateToken, startTest);
 
 // POST /api/tests/:id/submit - Submit test answers
 router.post('/:id/submit', authenticateToken, submitTest);
+
+router.patch('/:id/autosave', authenticateToken, autosaveTestProgress);
+
 
 /**
  * ============================

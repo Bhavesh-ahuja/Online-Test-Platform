@@ -68,6 +68,8 @@ model TestSubmission {
   status    String   @default("COMPLETED")
   score     Int
   createdAt DateTime @default(now())
+ 
+  answersDraft  Json?  
 
   testId Int
   test   Test @relation(fields: [testId], references: [id])
