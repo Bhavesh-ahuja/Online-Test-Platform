@@ -11,6 +11,7 @@ const getAutosaveKey = (testId, submissionId) =>
   `autosave:test:${testId}:${submissionId}`;
 
 
+
 // Question Status Constants
 const STATUS = {
   NOT_VISITED: 'not_visited',
@@ -125,6 +126,7 @@ function TestPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submissionId, setSubmissionId] = useState(null);
+  const [endTime, setEndTime] = useState(null);
 
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -251,13 +253,16 @@ useEffect(() => {
 
 
         // Step C: Calculate Remaining Time based on SERVER start time
-        const startTime = new Date(sessionData.startTime).getTime();
-        const durationInMs = data.duration * 60 * 1000;
-        const endTime = startTime + durationInMs;
-        const now = new Date().getTime();
+        // Step C: Calculate Remaining Time based on SERVER start time
+           const startTime = new Date(sessionData.startTime).getTime();
+           const durationInMs = data.duration * 60 * 1000;
+           const calculatedEndTime = startTime + durationInMs;
 
-        const secondsRemaining = (endTime - now) / 1000;
-        setTimeLeft(secondsRemaining);
+            setEndTime(calculatedEndTime);
+
+           const now = Date.now();
+            setTimeLeft(Math.floor((calculatedEndTime - now) / 1000));
+
 
       } catch (err) {
         setError(err.message);
@@ -371,24 +376,25 @@ useEffect(() => {
 
   // Timer
   useEffect(() => {
-    if (timeLeft === null) return;
-    
-    if (timeLeft <= 0) {
-      if (!loading) { 
-         alert("Time's up! Submitting your test...");
-         handleSubmit('TIMEOUT');
-      }
-      return;
+  if (!endTime) return;
+  if (loading) return;
+
+  const interval = setInterval(() => {
+    const now = Date.now();
+    const remainingSeconds = Math.floor((endTime - now) / 1000);
+
+    setTimeLeft(remainingSeconds);
+
+    // 🔒 auto-submit logic stays EXACTLY as it is
+    if (remainingSeconds <= 0) {
+      clearInterval(interval);
+      handleSubmit('TIMEOUT');
     }
+  }, 1000);
 
-    const interval = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
-    }, 1000);
+  return () => clearInterval(interval);
+}, [endTime, handleSubmit, loading]);
 
-    return () => clearInterval(interval);
-  }, [timeLeft, handleSubmit, loading]);
-
-  // Tab Detection
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) return;
