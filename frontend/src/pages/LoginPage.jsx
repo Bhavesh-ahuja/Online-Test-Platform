@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const sessionExpired = params.get("reason") === "session_expired";
+   
+  useEffect(() => {
+  if (sessionExpired) {
+    window.history.replaceState({}, "", "/login");
+  }
+}, [sessionExpired]);
+
   
   // State
   const [formData, setFormData] = useState({
@@ -64,6 +74,12 @@ function LoginPage() {
             </Link>
           </p>
         </div>
+         {sessionExpired && (
+          <div className="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded">
+           Your session has expired. Please log in again.
+          </div>
+         )}
+
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
