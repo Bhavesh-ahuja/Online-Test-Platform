@@ -9,6 +9,10 @@ const MAX_WARNINGS = 3;
 const RUNNING_STATUSES = ['IN_PROGRESS'];
 
 
+
+
+
+
 const getAutosaveKey = (testId, submissionId) =>
   `autosave:test:${testId}:${submissionId}`;
 
@@ -65,20 +69,27 @@ function WarningBanner({ count }) {
   );
 }
 
-function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, markedQuestions, visitedQuestions, onJump }) {
+function QuestionPalette({
+  questions,
+  totalQuestions,
+  currentQuestionIndex,
+  answers,
+  markedQuestions,
+  visitedQuestions,
+  onJump
+}) {
   // Helper to determine color class
   const getButtonClass = (index) => {
+  const questionId = questions[index].id;
   const isCurrent = index === currentQuestionIndex;
-  const isAnswered = answers[index] !== undefined;
+  const isAnswered = answers[questionId] !== undefined;
   const isMarked = markedQuestions.includes(index);
   const isVisited = visitedQuestions.includes(index);
 
   let baseClass =
     "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
 
-  if (isCurrent) {
-    return baseClass + "ring-2 ring-offset-2 ring-blue-500 bg-blue-100";
-  }
+  if (isCurrent) return baseClass + "ring-2 ring-offset-2 ring-blue-500 bg-blue-100";
   if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white";
   if (isMarked) return baseClass + "bg-purple-200";
   if (isAnswered) return baseClass + "bg-green-500 text-white";
@@ -86,6 +97,7 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
 
   return baseClass + "bg-gray-100";
 };
+
 
   
 
@@ -122,6 +134,8 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
 function TestPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const testId = id;
+    const LOCAL_AUTOSAVE_KEY = `local:test:${testId}`;
 
   // --- State ---
   const [test, setTest] = useState(null);
@@ -131,7 +145,7 @@ function TestPage() {
   const [endTime, setEndTime] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
+   const hasRestoredRef = useRef(false);
   
 
 
@@ -142,6 +156,8 @@ function TestPage() {
 
   const autosaveIntervalRef = useRef(null);
   const localAutosaveIntervalRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
+   const [lastSavedAt, setLastSavedAt] = useState(null);
 
 
 
@@ -246,12 +262,12 @@ if (contentType && contentType.includes('application/json')) {
   
 );
 
- 
-  useEffect(() => {
+
+useEffect(() => {
   if (!submissionId) return;
   if (submissionStatus !== 'IN_PROGRESS') return;
 
-  localAutosaveIntervalRef.current = setInterval(() => {
+  const interval = setInterval(() => {
     const autosaveKey = getAutosaveKey(id, submissionId);
     localStorage.setItem(
       autosaveKey,
@@ -263,52 +279,77 @@ if (contentType && contentType.includes('application/json')) {
     );
   }, 10000);
 
-  return () => {
-    if (localAutosaveIntervalRef.current) {
-      clearInterval(localAutosaveIntervalRef.current);
-      localAutosaveIntervalRef.current = null;
-    }
-  };
-}, [answers, markedQuestions, submissionId, submissionStatus, id]);
+  return () => clearInterval(interval);
+}, [answers, markedQuestions, submissionId, id]);
 
 
 
- useEffect(() => {
-  if (!submissionId) return;
-  if (submissionStatus !== 'IN_PROGRESS') return;
 
-  autosaveIntervalRef.current = setInterval(async () => {
-    const examToken = sessionStorage.getItem('examSessionToken');
-    if (!examToken) return;
 
-    try {
-      await fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${examToken}`
-        },
-        body: JSON.stringify({
-          submissionId,
-          answers,
-          markedQuestions
-        })
-      });
-    } catch (err) {
-      // silent fail – local autosave already protects data
-    }
+
+
+
+
+ // Inside TestPage.jsx
+useEffect(() => {
+  if (submissionStatus !== 'IN_PROGRESS' || !submissionId) return;
+
+  const examToken = sessionStorage.getItem('examSessionToken');
+  if (!examToken) return;
+
+  autosaveIntervalRef.current = setInterval(() => {
+    // Change URL to /autosave and method to PATCH to match test.routes.js
+    fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
+      method: 'PATCH', 
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${examToken}`,
+      },
+      body: JSON.stringify({
+        submissionId, // Ensure this matches the controller expectation
+        answers,
+        markedQuestions,
+      }),
+    }).catch((err) => console.error("Autosave failed:", err));
   }, 30000);
 
   return () => {
-    if (autosaveIntervalRef.current) {
-      clearInterval(autosaveIntervalRef.current);
-      autosaveIntervalRef.current = null;
-    }
+    if (autosaveIntervalRef.current) clearInterval(autosaveIntervalRef.current);
   };
-}, [submissionId, submissionStatus, answers, markedQuestions, id]);
+}, [submissionId, submissionStatus, id, answers, markedQuestions]); // Added dependencies to ensure current state is sent
 
 
- 
+ useEffect(() => {
+  if (!submissionId || !test || hasRestoredRef.current) return;
+
+  const autosaveKey = getAutosaveKey(id, submissionId);
+  const saved = localStorage.getItem(autosaveKey);
+
+  if (!saved) {
+    hasRestoredRef.current = true;
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    if (parsed.answers && typeof parsed.answers === 'object') {
+      setAnswers(parsed.answers);
+    }
+
+    if (Array.isArray(parsed.markedQuestions)) {
+      setMarkedQuestions(parsed.markedQuestions);
+    }
+
+    console.log('✅ Autosave restored correctly');
+  } catch (e) {
+    console.error('❌ Autosave restore failed', e);
+  }
+
+  hasRestoredRef.current = true;
+}, [submissionId, test, id]);
+
+
 
 
 // --- 1. Fetch & Init ---
@@ -350,6 +391,21 @@ useEffect(() => {
           Authorization: `Bearer ${sessionData.examSessionToken}`,
         },
       });
+
+      // Inside initTest after setTest(data);
+if (sessionData.draft) {
+  const { answers: savedAnswers, markedQuestions: savedMarked } = sessionData.draft;
+  
+  if (savedAnswers) setAnswers(savedAnswers);
+  if (savedMarked) setMarkedQuestions(savedMarked);
+  
+  // Mark all questions that have answers as "visited"
+  const savedVisited = Object.keys(savedAnswers || {}).map(id => 
+    data.questions.findIndex(q => q.id === parseInt(id))
+  ).filter(index => index !== -1);
+  
+  setVisitedQuestions(prev => [...new Set([...prev, ...savedVisited])]);
+}
 
       const data = await testRes.json();
       if (!isMounted) return;
@@ -433,6 +489,14 @@ useEffect(() => {
   }));
 };
 
+const handleAnswerChange = (questionId, value) => {
+  setAnswers(prev => ({
+    ...prev,
+    [questionId]: value
+  }));
+};
+
+
 
   const handleClearResponse = () => {
     const newAnswers = { ...answers };
@@ -443,13 +507,12 @@ useEffect(() => {
   };
 
   const toggleMarkForReview = () => {
-    if (markedQuestions.includes(currentQuestionIndex)) {
-      setMarkedQuestions(markedQuestions.filter(i => i !== currentQuestionIndex));
-    } else {
-      setMarkedQuestions([...markedQuestions, currentQuestionIndex]);
-    }
-  };
-
+  if (markedQuestions.includes(currentQuestionIndex)) {
+    setMarkedQuestions(markedQuestions.filter(i => i !== currentQuestionIndex));
+  } else {
+    setMarkedQuestions([...markedQuestions, currentQuestionIndex]);
+  }
+};
 
 
   useEffect(() => {
@@ -621,14 +684,16 @@ if (!test || !test.questions || test.questions.length === 0) {
 
         {/* Right: Question Palette (25%) */}
         <div className="w-1/4 p-4 bg-gray-100 border-l border-gray-200 overflow-y-auto">
-          <QuestionPalette
-         totalQuestions={test.questions.length}
-           currentQuestionIndex={currentQuestionIndex}
-        answers={answers}
-           markedQuestions={markedQuestions}
-            visitedQuestions={visitedQuestions}
-           onJump={handleJump}
-          />
+         <QuestionPalette
+  questions={test.questions}   // ✅ THIS LINE FIXES EVERYTHING
+  totalQuestions={test.questions.length}
+  currentQuestionIndex={currentQuestionIndex}
+  answers={answers}
+  markedQuestions={markedQuestions}
+  visitedQuestions={visitedQuestions}
+  onJump={handleJump}
+/>
+
 
         </div>
 

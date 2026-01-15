@@ -164,7 +164,9 @@ if (inProgress) {
     message: 'Resuming test',
     startTime: inProgress.createdAt,
     submissionId: inProgress.id,
-    examSessionToken
+    examSessionToken,
+    // ADD THIS LINE:
+    draft: inProgress.answersDraft 
   });
 }
 
@@ -513,28 +515,14 @@ export const uploadTestPDF = async (req, res) => {
 
 export const autosaveTestProgress = async (req, res) => {
   try {
+    // Use the verified data from the middleware
     const studentId = req.examSession.studentId;
+    const submissionId = req.examSession.submissionId;
+    const testId = req.examSession.testId;
+    
+    const { answers, markedQuestions } = req.body;
 
-    const testId = parseInt(req.params.id);
-    const { submissionId, answers, markedQuestions } = req.body;
-
-    if (!submissionId) {
-      return res.status(400).json({ error: 'submissionId required' });
-    }
-
-    const submission = await prisma.testSubmission.findFirst({
-      where: {
-        id: submissionId,
-        testId,
-        studentId,
-        status: 'IN_PROGRESS'
-      }
-    });
-
-    if (!submission) {
-      return res.status(404).json({ error: 'Active submission not found' });
-    }
-
+    // The middleware already confirmed this submission exists and is IN_PROGRESS
     await prisma.testSubmission.update({
       where: { id: submissionId },
       data: {
