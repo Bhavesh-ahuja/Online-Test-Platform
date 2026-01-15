@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
 import { localToUtc } from '../utils/datetime';
-import { API_BASE_URL } from '../../config'; 
+ 
 
 function CreateTestPage() {
   const navigate = useNavigate();
@@ -28,6 +28,11 @@ function CreateTestPage() {
  
   const [attemptType, setAttemptType] = useState('ONCE');
   const [maxAttempts, setMaxAttempts] = useState(1);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showStartOk, setShowStartOk] = useState(false);
+  const [showEndOk, setShowEndOk] = useState(false);
+
+
 
   // --- Helpers ---
   const markDirty = () => setHasUnsavedChanges(true);
@@ -58,25 +63,20 @@ function CreateTestPage() {
   };
 
   // --- Option Management ---
-  const handleOptionChange = (qIndex, oIndex, value) => {
+
+  const addOption = (qi) => {
     const newQuestions = [...questions];
-    newQuestions[qIndex].options[oIndex] = value;
+    newQuestions[qi].options.push('');
     setQuestions(newQuestions);
   };
 
-  const addOption = (qIndex) => {
+  const removeOption = (qi, oIndex) => {
     const newQuestions = [...questions];
-    newQuestions[qIndex].options.push('');
-    setQuestions(newQuestions);
-  };
-
-  const removeOption = (qIndex, oIndex) => {
-    const newQuestions = [...questions];
-    if (newQuestions[qIndex].options.length <= 2) {
+    if (newQuestions[qi].options.length <= 2) {
       alert("MCQ must have at least 2 options.");
       return;
     }
-    newQuestions[qIndex].options.splice(oIndex, 1);
+    newQuestions[qi].options.splice(oIndex, 1);
     setQuestions(newQuestions);
   };
 
@@ -101,7 +101,7 @@ function CreateTestPage() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await fetch('http://localhost:8000/api/tests/upload-pdf', {
+      const res = await fetch('http://localhost:8000/api/tests/upload-pdf', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -110,8 +110,8 @@ function CreateTestPage() {
         body: formData
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to upload PDF');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload PDF');
 
       // Logic: If the current form has only 1 empty question, replace it.
       // Otherwise, append the new questions to the bottom.
@@ -159,13 +159,6 @@ function CreateTestPage() {
       return;
     }
 
-    // Validation: Check for empty options
-    const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
-    if (invalidMCQ) {
-      alert("All MCQ questions must have at least 2 options.");
-      return;
-    }
-
     try {
       const res = await fetch(`${API_BASE_URL}/api/tests`, {
         method: 'POST',
@@ -179,7 +172,7 @@ function CreateTestPage() {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to create test');
+      if (!res.ok) throw new Error('Failed to create test');
 
       alert('Test Created Successfully!');
       navigate('/dashboard');
@@ -187,6 +180,7 @@ function CreateTestPage() {
       alert(error.message);
     }
   };
+  
 
   return (
     <div className="container mx-auto p-6 max-w-3xl">
@@ -236,24 +230,7 @@ function CreateTestPage() {
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600">Duration (minutes)</label>
-              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
-            </div>
-
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-              name="description"
-              rows="3"
-              value={testData.description}
-              onChange={handleTestChange}
-            />
-          </div>
-
+        
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
@@ -342,12 +319,7 @@ function CreateTestPage() {
             </div>
           </div>
         </div>
-          {questions.map((q, qIndex) => (
-            <div key={qIndex} className="bg-white p-6 rounded-lg shadow-md border border-gray-200 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium bg-gray-100 px-3 py-1 rounded text-sm">Question {qIndex + 1}</h3>
-                <button type="button" onClick={() => removeQuestion(qIndex)} className="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
-              </div>
+         
 
         {/* QUESTIONS SECTION */}
         <div className="space-y-6">
@@ -409,29 +381,10 @@ function CreateTestPage() {
                 placeholder="Enter Question Text"
                 value={q.text}
                 required
-                onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
+                onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
               />
 
-              <div className="mb-4 pl-4 border-l-2 border-gray-200">
-                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Options</p>
-                {q.options.map((opt, oIndex) => (
-                  <div key={oIndex} className="flex gap-2 mb-2">
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-xs font-bold text-gray-600">
-                      {String.fromCharCode(65 + oIndex)}
-                    </div>
-                    <input
-                      className="grow p-2 border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-400 outline-none"
-                      placeholder={`Option ${oIndex + 1}`}
-                      value={opt}
-                      required
-                      onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
-                    />
-                    <button type="button" onClick={() => removeOption(qIndex, oIndex)} className="text-red-400 hover:text-red-600 px-2 text-lg">×</button>
-                  </div>
-                ))}
-                <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline mt-1 ml-8">+ Add Option</button>
-              </div>
-
+              
               <div className="pt-4 border-t">
                 <label className="block text-xs font-bold text-green-600 uppercase mb-2">Set Correct Answer</label>
                 <select
@@ -460,32 +413,32 @@ function CreateTestPage() {
           </button>
         </div>
 
-        {/* FINAL ACTION BUTTONS [cite: 2] */}
-        <div className="flex gap-4 pt-6">
-          <button
-            type="button"
-            onClick={() => {
-              if (!hasUnsavedChanges || window.confirm('You have unsaved changes. Discard them?')) {
-                navigate('/dashboard');
-              }
-            }}
-            className="w-1/3 bg-gray-100 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition"
-          >
-            Cancel
-          </button>
+        {/* FINAL ACTION BUTTONS */}
+<div className="flex gap-4 pt-6">
+  <button
+    type="button"
+    onClick={() => {
+      if (!hasUnsavedChanges || window.confirm('You have unsaved changes. Discard them?')) {
+        navigate('/dashboard');
+      }
+    }}
+    className="w-1/3 bg-gray-100 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition"
+  >
+    Cancel
+  </button>
 
-          <button
-            type="submit"
-            className="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition transform active:scale-95"
-          >
-            Create Test
-          </button>
-        <div className="flex gap-4 pt-4 border-t">
-          <button type="button" onClick={addQuestion} className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition">+ Add Blank Question</button>
-          <button type="submit" className="grow px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg transition transform active:scale-95">Save Test</button>
-        </div>
+  <button
+    type="submit"
+    className="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition transform active:scale-95"
+  >
+    Create Test
+  </button>
+</div>
+
+        
       </form>
     </div>
+    
   );
 }
 

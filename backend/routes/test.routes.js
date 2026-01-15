@@ -54,9 +54,17 @@ router.get('/my-submissions', authenticateToken, getMySubmissions);
  * TEST ROUTES (WITH :id)
  * ============================
  */
+// ADMIN: Get test with correct answers
+router.get(
+  '/:id/admin',
+  authenticateToken,
+  isAdmin,
+  getTestByIdForAdmin
+);
 
 // GET /api/tests/:id - Get test details by ID
 router.get('/:id', authenticateExamSession, getTestById);
+
 
 
 // PUT /api/tests/:id - Admin only: Update test

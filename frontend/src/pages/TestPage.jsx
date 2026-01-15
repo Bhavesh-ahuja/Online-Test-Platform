@@ -147,6 +147,8 @@ function TestPage() {
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
    const hasRestoredRef = useRef(false);
+   const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+
   
 
 
@@ -188,11 +190,11 @@ if (autosaveIntervalRef.current) {
 if (localAutosaveIntervalRef.current) {
   clearInterval(localAutosaveIntervalRef.current);
   localAutosaveIntervalRef.current = null;
-}
+};
 
 
 
-    if (loading) return;
+    
 
    
 
@@ -393,6 +395,8 @@ useEffect(() => {
         },
       });
 
+      const data = await testRes.json();
+
       // Inside initTest after setTest(data);
 if (sessionData.draft) {
   const { answers: savedAnswers, markedQuestions: savedMarked } = sessionData.draft;
@@ -408,7 +412,7 @@ if (sessionData.draft) {
   setVisitedQuestions(prev => [...new Set([...prev, ...savedVisited])]);
 }
 
-      const data = await testRes.json();
+      
       if (!isMounted) return;
 
       setTest(data);
@@ -516,29 +520,36 @@ const handleAnswerChange = (questionId, value) => {
 };
 
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) return;
-      setWarnings(prev => {
-        const updated = prev + 1;
-        if (updated >= MAX_WARNINGS) {
-          alert('Violation Limit Reached. Test Terminated');
-          handleSubmit('TERMINATED');
-        }, 100);
-      }
-      return updated;
-    });
-  }, [handleSubmit])
+ useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      handleViolation();
+    }
+  };
 
-  // Tab Switching Detection
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) return;
-        handleViolation();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [handleSubmit]);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, []);
+
+
+const handleViolation = () => {
+  setWarnings(prev => {
+    const updated = prev + 1;
+
+    if (updated >= MAX_WARNINGS) {
+      alert('Violation Limit Reached. Test Terminated');
+      handleSubmit('TERMINATED');
+    }
+
+    return updated; // ✅ THIS WAS MISSING
+  });
+};
+
+
+  
+  
 
   // Full Screen Detection
   useEffect(() => {

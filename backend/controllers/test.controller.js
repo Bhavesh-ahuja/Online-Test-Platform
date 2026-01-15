@@ -264,6 +264,28 @@ export const getTestById = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch test' });
   }
 };
+// Admin: get test with correct answers
+export const getTestByIdForAdmin = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const test = await prisma.test.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        questions: true // admins CAN see correct answers
+      }
+    });
+
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    res.json(test);
+  } catch (error) {
+    console.error('Fetch test (admin) error:', error);
+    res.status(500).json({ error: 'Failed to fetch test (admin)' });
+  }
+};
 
 
 export const submitTest = async (req, res) => {

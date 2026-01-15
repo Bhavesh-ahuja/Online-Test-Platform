@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { utcToLocal, localToUtc } from '../utils/datetime';
+import { utcToLocal, localToUtc } from "../utils/datetime.js";
 import { API_BASE_URL } from '../../config';
 
 function EditTestPage() {
@@ -25,6 +25,7 @@ function EditTestPage() {
   // Attempt Configuration State
   const [attemptType, setAttemptType] = useState('ONCE');
   const [maxAttempts, setMaxAttempts] = useState(1);
+   
 
   // UI State for Time Pickers
   const [showStartOk, setShowStartOk] = useState(false);
@@ -131,16 +132,9 @@ function EditTestPage() {
     setQuestions(questions.filter((_, index) => index !== qi));
     markDirty();
   };
-  const handleTestChange = (e) => setTestData({ ...testData, [e.target.name]: e.target.value });
+  
 
-  // (Keep Question/Option Handlers exactly the same as CreatePage)
-  const handleQuestionChange = (index, field, value) => { const newQuestions = [...questions]; newQuestions[index][field] = value; setQuestions(newQuestions); };
-  const addQuestion = () => setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
-  const removeQuestion = (index) => { if (questions.length === 1) return alert("Min 1 question."); setQuestions(questions.filter((_, i) => i !== index)); };
-  const handleOptionChange = (qIndex, oIndex, value) => { const newQuestions = [...questions]; newQuestions[qIndex].options[oIndex] = value; setQuestions(newQuestions); };
-  const addOption = (qIndex) => { const newQuestions = [...questions]; newQuestions[qIndex].options.push(''); setQuestions(newQuestions); };
-  const removeOption = (qIndex, oIndex) => { const newQuestions = [...questions]; if (newQuestions[qIndex].options.length <= 2) return alert("Min 2 options."); newQuestions[qIndex].options.splice(oIndex, 1); setQuestions(newQuestions); };
-
+ 
   // --- Form Submission ---
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -179,7 +173,7 @@ function EditTestPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update test.');
+      if (!res.ok) throw new Error('Failed to update test.');
 
       alert('Test Updated Successfully!');
       navigate('/dashboard');
@@ -203,22 +197,117 @@ function EditTestPage() {
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
           
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Duration (minutes)</label>
-              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
-            </div>
-            
-            {/* --- NEW SCHEDULED FIELDS --- */}
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Start Window</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">End Window</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
-            </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+                Duration (minutes)
+             </label>
+              <input
+               type="number"
+                className="w-full p-2 border rounded"
+                 name="duration"
+                 required
+               value={testData.duration}
+                   onChange={handleTestChange}
+                   />
+           </div>
           </div>
-        </div>
+
+
+  {/* ATTEMPT SETTINGS */}
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Allowed Attempts
+    </label>
+
+    <div className="flex gap-4 items-center h-10">
+      {['ONCE', 'LIMITED', 'UNLIMITED'].map((type) => (
+        <label key={type} className="flex items-center gap-1 text-sm cursor-pointer">
+          <input
+            type="radio"
+            className="accent-blue-600"
+            checked={attemptType === type}
+            onChange={() => {
+              setAttemptType(type);
+              setHasUnsavedChanges(true);
+            }}
+          />
+          {type.charAt(0) + type.slice(1).toLowerCase()}
+        </label>
+      ))}
+    </div>
+
+    {attemptType === 'LIMITED' && (
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-sm text-gray-500">Max:</span>
+        <input
+          type="number"
+          min={1}
+          className="w-20 border rounded p-1 text-center"
+          value={maxAttempts}
+          onChange={(e) => {
+            setMaxAttempts(Number(e.target.value));
+            setHasUnsavedChanges(true);
+          }}
+        />
+      </div>
+    )}
+  </div>
+</div>  {/* ✅ THIS WAS MISSING */}
+
+
+            
+            {/* SCHEDULING */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+  <div className="relative">
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      Start Time (Local)
+    </label>
+    <input
+      type="datetime-local"
+      className="w-full p-2 border rounded pr-14"
+      name="scheduledStart"
+      value={testData.scheduledStart}
+      onChange={(e) => {
+        handleTestChange(e);
+        setShowStartOk(true);
+      }}
+    />
+    {showStartOk && (
+      <button
+        type="button"
+        className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
+        onClick={() => setShowStartOk(false)}
+      >
+        OK
+      </button>
+    )}
+  </div>
+
+  <div className="relative">
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      End Time (Local)
+    </label>
+    <input
+      type="datetime-local"
+      className="w-full p-2 border rounded pr-14"
+      name="scheduledEnd"
+      value={testData.scheduledEnd}
+      onChange={(e) => {
+        handleTestChange(e);
+        setShowEndOk(true);
+      }}
+    />
+    {showEndOk && (
+      <button
+        type="button"
+        className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
+        onClick={() => setShowEndOk(false)}
+      >
+        OK
+      </button>
+    )}
+  </div>
+</div>
 
         {/* --- QUESTIONS SECTION --- */}
         <div className="space-y-6">
@@ -296,7 +385,7 @@ function EditTestPage() {
                 </select>
               </div>
 
-              <input className="w-full p-2 border rounded border-green-200 bg-green-50" placeholder="Correct Answer" value={q.correctAnswer} required onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
+              
             </div>
           ))}
 
