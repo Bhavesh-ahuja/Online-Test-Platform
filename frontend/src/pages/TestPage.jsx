@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import Modal from '../components/Modal';
 import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 /* --------------------------------------------------------
@@ -53,7 +54,7 @@ function WarningBanner({ count }) {
   if (!count) return null;
   return (
     <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mx-4 mt-4 text-sm font-medium" role="alert">
-      Warning! Tab switching is prohibited. ({count}/{MAX_WARNINGS})
+      Warning! Tab switching/Exiting Full Screen is prohibited. ({count}/{MAX_WARNINGS})
     </div>
   );
 }
@@ -125,6 +126,7 @@ function TestPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [warnings, setWarnings] = useState(0);
+  const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
 
   // Data Storage
   // We use objects keyed by Question INDEX (0, 1, 2) for local UI state
@@ -277,11 +279,11 @@ function TestPage() {
   // Timer
   useEffect(() => {
     if (timeLeft === null) return;
-    
+
     if (timeLeft <= 0) {
-      if (!loading) { 
-         alert("Time's up! Submitting your test...");
-         handleSubmit('TIMEOUT');
+      if (!loading) {
+        alert("Time's up! Submitting your test...");
+        handleSubmit('TIMEOUT');
       }
       return;
     }
@@ -293,22 +295,72 @@ function TestPage() {
     return () => clearInterval(interval);
   }, [timeLeft, handleSubmit, loading]);
 
-  // Tab Detection
+
+  // Helper to handle violations (increments count and checks limit)
+  const handleViolation = useCallback(() => {
+    setWarnings(prev => {
+      const updated = prev + 1;
+      if (updated >= MAX_WARNINGS) {
+        // Small timeout to allow state to update before alert blocks thread
+        setTimeout(() => {
+          alert('Violation Limit Reached. Test Terminated');
+          handleSubmit('TERMINATED');
+        }, 100);
+      }
+      return updated;
+    });
+  }, [handleSubmit])
+
+  // Tab Switching Detection
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) return;
-      setWarnings(prev => {
-        const updated = prev + 1;
-        if (updated >= MAX_WARNINGS) {
-          alert('Violation Limit Reached. Test Terminated');
-          handleSubmit('TERMINATED');
-        }
-        return updated;
-      });
+        handleViolation();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [handleSubmit]);
+
+  // Full Screen Detection
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      // If fullscreenElement is null, it means we exited full screen
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        handleViolation();
+        // Open the modal (if not terminated yet)
+        setIsFullScreenModalOpen(true);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullScreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullScreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullScreenChange);
+    };
+  }, [handleViolation]);
+
+  // Handle "OK" click on Warning Modal
+  const handleFixFullScreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      }
+      setIsFullScreenModalOpen(false);
+    } catch (err) {
+      console.error("Failed to re-enter full screen", err);
+      // We close the modal anyway; if they are still not in FS, listener won't fire again 
+      // immediately, but next exit attempt will trigger it.
+      setIsFullScreenModalOpen(false);
+    }
+  };
 
   // No-Copy Shield
   useEffect(() => {
@@ -451,6 +503,29 @@ function TestPage() {
         </div>
 
       </div>
+
+      {/* Full Screen Warning Modal */}
+      <Modal
+        isOpen={isFullScreenModalOpen}
+        onClose={handleFixFullScreen}
+        title="Security Warning"
+        actions={
+          <button onClick={handleFixFullScreen} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-semibold shadow-md">
+            OK, Return to Full Screen
+          </button>
+        }
+      >
+        <div className="text-center">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h3 className="text-xl font-bold text-red-600 mb-2">Full-Screen Mode Required</h3>
+          <p className="text-gray-600">
+            You have exited full-screen mode. This has been recorded as a <span className="font-bold text-red-500">violation ({warnings}/{MAX_WARNINGS})</span>.
+          </p>
+          <p className="text-sm text-gray-500 mt-4">
+            Please click <strong>OK</strong> to return to full-screen mode and continue the test.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }
