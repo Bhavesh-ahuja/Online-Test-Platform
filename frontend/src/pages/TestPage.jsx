@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
@@ -6,6 +6,8 @@ import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based o
    Global Constants & Helpers
 ---------------------------------------------------------*/
 const MAX_WARNINGS = 3;
+const RUNNING_STATUSES = ['IN_PROGRESS'];
+
 
 const getAutosaveKey = (testId, submissionId) =>
   `autosave:test:${testId}:${submissionId}`;
@@ -127,11 +129,19 @@ function TestPage() {
   const [error, setError] = useState('');
   const [submissionId, setSubmissionId] = useState(null);
   const [endTime, setEndTime] = useState(null);
+  const [submissionStatus, setSubmissionStatus] = useState(null);
+  
+
 
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [warnings, setWarnings] = useState(0);
+
+  const autosaveIntervalRef = useRef(null);
+  const localAutosaveIntervalRef = useRef(null);
+
+
 
   // Data Storage
   // We use objects keyed by Question INDEX (0, 1, 2) for local UI state
@@ -140,10 +150,104 @@ function TestPage() {
   const [markedQuestions, setMarkedQuestions] = useState([]); // [0, 5, 8] (Indices)
   const [visitedQuestions, setVisitedQuestions] = useState([0]); // [0, 1, 2] (Indices)
     
-     useEffect(() => {
-  if (!submissionId) return;
+  // --- 4. Submission Logic ---
+  const handleSubmit = useCallback(
+  async (status = 'COMPLETED') => {
+    const examToken = sessionStorage.getItem('examSessionToken');
+    const loginToken = localStorage.getItem('token');
+     if (!examToken) {
+    alert("Session expired. Please refresh.");
+    return;
+  }
+    // 🔥 HARD STOP autosave immediately
+if (autosaveIntervalRef.current) {
+  clearInterval(autosaveIntervalRef.current);
+  autosaveIntervalRef.current = null;
+}
+if (localAutosaveIntervalRef.current) {
+  clearInterval(localAutosaveIntervalRef.current);
+  localAutosaveIntervalRef.current = null;
+}
 
-  const interval = setInterval(() => {
+
+
+    if (loading) return;
+
+   
+
+    const formattedAnswers = {};
+    if (test && test.questions) {
+      test.questions.forEach((q) => {
+        if (answers[q.id]) {
+          formattedAnswers[q.id] = answers[q.id];
+        }
+      });
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
+      
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+           Authorization: `Bearer ${examToken}`,
+           },
+
+        body: JSON.stringify({
+          answers: formattedAnswers,
+          status,
+        }),
+      });
+      // 🔴 HARD STOP: test already completed
+        if (response.status === 403) {
+          const data = await response.json();
+
+         if (data.finalSubmissionId) {
+            navigate(`/results/${data.finalSubmissionId}`);
+               return; // 🚨 STOP rendering test page
+             }
+           }
+
+
+      let data;
+const contentType = response.headers.get('content-type');
+
+if (contentType && contentType.includes('application/json')) {
+  data = await response.json();
+} else {
+  const text = await response.text();
+  throw new Error(text || 'Submit failed');
+}
+
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit');
+      }
+
+      // ✅ clear autosave ONLY after successful submit
+      if (submissionId) {
+        const autosaveKey = getAutosaveKey(id, submissionId);
+        localStorage.removeItem(autosaveKey);
+      }
+      setSubmissionStatus(status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED');
+
+      // ✅ single navigation (no duplicate)
+      navigate(`/results/${data.submissionId}`);
+      sessionStorage.removeItem('examSessionToken');
+    } catch (err) {
+      alert('Error submitting test: ' + err.message);
+    }
+  },
+  [id, answers, navigate, loading, test, submissionId]
+  
+);
+
+ 
+  useEffect(() => {
+  if (!submissionId) return;
+  if (submissionStatus !== 'IN_PROGRESS') return;
+
+  localAutosaveIntervalRef.current = setInterval(() => {
     const autosaveKey = getAutosaveKey(id, submissionId);
     localStorage.setItem(
       autosaveKey,
@@ -155,18 +259,23 @@ function TestPage() {
     );
   }, 10000);
 
-  return () => clearInterval(interval);
-}, [answers, markedQuestions, submissionId, id]);
+  return () => {
+    if (localAutosaveIntervalRef.current) {
+      clearInterval(localAutosaveIntervalRef.current);
+      localAutosaveIntervalRef.current = null;
+    }
+  };
+}, [answers, markedQuestions, submissionId, submissionStatus, id]);
 
 
-useEffect(() => {
+
+ useEffect(() => {
   if (!submissionId) return;
+  if (submissionStatus !== 'IN_PROGRESS') return;
 
-  const interval = setInterval(async () => {
+  autosaveIntervalRef.current = setInterval(async () => {
     const examToken = sessionStorage.getItem('examSessionToken');
-
     if (!examToken) return;
-
 
     try {
       await fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
@@ -181,117 +290,112 @@ useEffect(() => {
           markedQuestions
         })
       });
-    } catch {
+    } catch (err) {
       // silent fail – local autosave already protects data
     }
-  }, 30000); // 30 seconds
+  }, 30000);
 
-  return () => clearInterval(interval);
-}, [submissionId, answers, markedQuestions, id]);
+  return () => {
+    if (autosaveIntervalRef.current) {
+      clearInterval(autosaveIntervalRef.current);
+      autosaveIntervalRef.current = null;
+    }
+  };
+}, [submissionId, submissionStatus, answers, markedQuestions, id]);
 
 
-  // --- 1. Fetch & Init ---
-  useEffect(() => {
-    const initTest = async () => {
+ 
+
+
+// --- 1. Fetch & Init ---
+// --- Step A, B, C: Init Test ---
+useEffect(() => {
+  let isMounted = true;
+
+  const initTest = async () => {
     const loginToken = localStorage.getItem('token');
     if (!loginToken) {
-     navigate('/login');
-     return;
-     }
+      navigate('/login');
+      return;
+    }
 
-      try {
-        // Step A: Fetch Test Content
-        
-
-        // Step B: Start/Resume Test Session (Get Start Time & Verify Schedule)
-        const startRes = await fetch(`http://localhost:8000/api/tests/${id}/start`, {
+    try {
+      const startRes = await fetch(
+        `http://localhost:8000/api/tests/${id}/start`,
+        {
           method: 'POST',
           headers: { Authorization: `Bearer ${loginToken}` },
-        });
-
-        if (!startRes.ok) {
-          const errData = await startRes.json();
-
-          // Handle Schedule/Security Errors
-          if (startRes.status === 403) {
-            alert(errData.error || "Access denied.");
-            navigate('/dashboard');
-            return;
-          }
-          throw new Error(errData.error || 'Failed to start test session');
         }
+      );
 
-        const sessionData = await startRes.json();
-        sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
-         // Step B: Fetch Test Content (AFTER exam session starts)
-         const examToken = sessionStorage.getItem('examSessionToken');
-
-        const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
-           headers: {
-             Authorization: `Bearer ${examToken || loginToken}`,
-             },
-          });
-
-
-        if (!testRes.ok) {
-            throw new Error('Failed to fetch test data');
-         }
-
-           const data = await testRes.json();
-
-          if (data.questions && Array.isArray(data.questions)) {
-  data.questions = shuffleArray(data.questions);
-              }
-
-               setTest(data);
- 
-        setSubmissionId(sessionData.submissionId);
-        const autosaveKey = `autosave:test:${id}:${sessionData.submissionId}`;
-        const saved = localStorage.getItem(autosaveKey);
-
-            if (saved) {
-           try {
-            const parsed = JSON.parse(saved);
-            if (parsed.answers) {
-               setAnswers(parsed.answers);
-                }
-            if (parsed.markedQuestions) {
-                   setMarkedQuestions(parsed.markedQuestions);
-              }
-                  }          catch (e) {
-               console.warn("Failed to restore autosave", e);
-                    }
-          }
-
-
-          if (!saved && sessionData.answersDraft) {
-            setAnswers(sessionData.answersDraft.answers || {});
-              setMarkedQuestions(sessionData.answersDraft.markedQuestions || []);
-           }
-
-
-
-        // Step C: Calculate Remaining Time based on SERVER start time
-        // Step C: Calculate Remaining Time based on SERVER start time
-           const startTime = new Date(sessionData.startTime).getTime();
-           const durationInMs = data.duration * 60 * 1000;
-           const calculatedEndTime = startTime + durationInMs;
-
-            setEndTime(calculatedEndTime);
-
-           const now = Date.now();
-            setTimeLeft(Math.floor((calculatedEndTime - now) / 1000));
-
-
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!startRes.ok) {
+        const err = await startRes.json();
+        throw new Error(err.error || 'Start failed');
       }
-    };
 
-    initTest();
-  }, [id, navigate]);
+      const sessionData = await startRes.json();
+
+      if (!isMounted) return;
+
+      setSubmissionStatus(sessionData.status || 'IN_PROGRESS');
+      setSubmissionId(sessionData.submissionId);
+      sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
+
+      const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        headers: {
+          Authorization: `Bearer ${sessionData.examSessionToken}`,
+        },
+      });
+
+      const data = await testRes.json();
+      if (!isMounted) return;
+
+      setTest(data);
+
+      const startTime = new Date(sessionData.startTime).getTime();
+const end = startTime + data.duration * 60 * 1000;
+
+setEndTime(end);
+setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  initTest();
+  return () => {
+    isMounted = false;
+  };
+}, [id, navigate]);
+
+
+      // --- Step D: Timer & Auto Submit ---
+useEffect(() => {
+  if (submissionStatus !== 'IN_PROGRESS') return;
+  if (!endTime) return;
+
+  const interval = setInterval(() => {
+    const remaining = Math.max(
+      0,
+      Math.floor((endTime - Date.now()) / 1000)
+    );
+    setTimeLeft(remaining);
+
+    if (remaining === 0) {
+      clearInterval(interval);
+      handleSubmit('TIMEOUT');
+    }
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, [endTime, submissionStatus, handleSubmit]);
+
+
+  
+
 
   // --- 2. Navigation Handlers ---
   const handleJump = (index) => {
@@ -340,92 +444,7 @@ useEffect(() => {
     }
   };
 
-  // --- 4. Submission Logic ---
-  const handleSubmit = useCallback(
-  async (status = 'COMPLETED') => {
-    const examToken = sessionStorage.getItem('examSessionToken');
 
-    if (loading) return;
-
-   
-
-    const formattedAnswers = {};
-    if (test && test.questions) {
-      test.questions.forEach((q) => {
-        if (answers[q.id]) {
-          formattedAnswers[q.id] = answers[q.id];
-        }
-      });
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
-      
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${examToken}`,
-        },
-        body: JSON.stringify({
-          answers: formattedAnswers,
-          status,
-        }),
-      });
-
-      let data;
-const contentType = response.headers.get('content-type');
-
-if (contentType && contentType.includes('application/json')) {
-  data = await response.json();
-} else {
-  const text = await response.text();
-  throw new Error(text || 'Submit failed');
-}
-
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit');
-      }
-
-      // ✅ clear autosave ONLY after successful submit
-      if (submissionId) {
-        const autosaveKey = getAutosaveKey(id, submissionId);
-        localStorage.removeItem(autosaveKey);
-      }
-
-      // ✅ single navigation (no duplicate)
-      navigate(`/results/${data.submissionId}`);
-    } catch (err) {
-      alert('Error submitting test: ' + err.message);
-    }
-  },
-  [id, answers, navigate, loading, test, submissionId]
-);
-
-    
-
-  // --- 5. Effects (Timer, Auto-Submit, Tab Detection) ---
-
-  // Timer
-  useEffect(() => {
-  if (!endTime) return;
-  if (loading) return;
-
-  const interval = setInterval(() => {
-    const now = Date.now();
-    const remainingSeconds = Math.floor((endTime - now) / 1000);
-
-    setTimeLeft(remainingSeconds);
-
-    // 🔒 auto-submit logic stays EXACTLY as it is
-    if (remainingSeconds <= 0) {
-      clearInterval(interval);
-      handleSubmit('TIMEOUT');
-    }
-  }, 1000);
-
-  return () => clearInterval(interval);
-}, [endTime, handleSubmit, loading]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -442,6 +461,7 @@ if (contentType && contentType.includes('application/json')) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [handleSubmit]);
+  
 
   // No-Copy Shield
   useEffect(() => {
@@ -458,17 +478,38 @@ if (contentType && contentType.includes('application/json')) {
     };
   }, []);
 
+  if (loading) {
+  return <div className="flex h-screen items-center justify-center">Loading Test...</div>;
+}
+
+if (error) {
+  return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
+}
+
+if (!test || !test.questions || test.questions.length === 0) {
+  return <div className="flex h-screen items-center justify-center">Test data not available</div>;
+}
+
+
 
   if (loading) return <div className="flex h-screen items-center justify-center text-lg">Loading Test...</div>;
   if (error) return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
 
-  const currentQuestion = test?.questions[currentQuestionIndex];
+  const currentQuestion =
+  test && test.questions && test.questions[currentQuestionIndex]
+    ? test.questions[currentQuestionIndex]
+    : null;
+   if (!currentQuestion) {
+  return <div className="flex h-screen items-center justify-center">Loading Question...</div>;
+}
+
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 select-none">
 
       {/* Header / Timer */}
-      <TimerDisplay seconds={timeLeft || 0} />
+     {endTime && <TimerDisplay seconds={timeLeft} />}
+
       <WarningBanner count={warnings} />
 
       {/* Main Layout */}
@@ -481,7 +522,8 @@ if (contentType && contentType.includes('application/json')) {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Question {currentQuestionIndex + 1}</h2>
             <div className="text-sm text-gray-500">
-              {test.title}
+              {test?.title || ''}
+
             </div>
           </div>
 

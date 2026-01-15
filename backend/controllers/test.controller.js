@@ -136,46 +136,68 @@ export const startTest = async (req, res) => {
       return res.status(403).json({ error: 'Test window has closed.' });
     }
 
-    const completedAttempts = await prisma.testSubmission.count({
-      where: {
-        testId: parseInt(id),
-        studentId,
-        status: { not: 'IN_PROGRESS' }
-      }
-    });
+    // ===============================
+// ATTEMPT & RESUME LOGIC (FIXED)
+// ===============================
 
-    if (test.attemptType === 'ONCE' && completedAttempts >= 1) {
-      return res.status(403).json({ error: 'You have already attempted this test.' });
-    }
+const submissions = await prisma.testSubmission.findMany({
+  where: {
+    testId: parseInt(id),
+    studentId
+  },
+  orderBy: { createdAt: 'desc' }
+});
 
-    if (
-      test.attemptType === 'LIMITED' &&
-      test.maxAttempts !== null &&
-      completedAttempts >= test.maxAttempts
-    ) {
-      return res.status(403).json({
-        error: `Attempt limit reached (${test.maxAttempts})`
-      });
-    }
+const inProgress = submissions.find(s => s.status === 'IN_PROGRESS');
+const completedCount = submissions.filter(s => s.status !== 'IN_PROGRESS').length;
 
-    let submission = await prisma.testSubmission.findFirst({
-      where: {
-        testId: parseInt(id),
-        studentId,
-        status: 'IN_PROGRESS'
-      }
-    });
+// 1️⃣ Resume if already IN_PROGRESS
+if (inProgress) {
+  const examSessionToken = createExamSessionToken({
+    submissionId: inProgress.id,
+    testId: test.id,
+    studentId: inProgress.studentId,
+    expiresInSeconds: test.duration * 60 + 15 * 60
+  });
 
-    if (!submission) {
-      submission = await prisma.testSubmission.create({
-        data: {
-          testId: parseInt(id),
-          studentId,
-          status: 'IN_PROGRESS',
-          score: 0
-        }
-      });
-    }
+  return res.json({
+    message: 'Resuming test',
+    startTime: inProgress.createdAt,
+    submissionId: inProgress.id,
+    examSessionToken
+  });
+}
+
+// 2️⃣ Block if attempts exhausted
+if (test.attemptType === 'ONCE' && completedCount >= 1) {
+  return res.status(403).json({
+    error: 'Test already completed',
+    finalSubmissionId: submissions[0].id
+  });
+}
+
+if (
+  test.attemptType === 'LIMITED' &&
+  test.maxAttempts !== null &&
+  completedCount >= test.maxAttempts
+) {
+  return res.status(403).json({
+    error: 'Maximum attempts reached',
+    finalSubmissionId: submissions[0].id
+  });
+}
+
+// 3️⃣ Create NEW submission (allowed)
+const submission = await prisma.testSubmission.create({
+  data: {
+    testId: parseInt(id),
+    studentId,
+    status: 'IN_PROGRESS',
+    score: 0
+  }
+});
+
+    
 
     
 
@@ -270,39 +292,50 @@ export const getTestByIdForAdmin = async (req, res) => {
    SUBMIT TEST
 ========================= */
 export const submitTest = async (req, res) => {
-  if (!req.examSession) {
-  return res.status(401).json({ error: 'Invalid or expired exam session' });
-}
-
-  const { id } = req.params;
-  const { answers, status } = req.body;
-  const studentId = req.examSession.studentId;
-
-
   try {
-    const submission = await prisma.testSubmission.findFirst({
-      where: {
-        testId: parseInt(id),
-        studentId,
-        status: 'IN_PROGRESS'
-      },
-      include: { test: true }
-    });
-
-    if (!submission) {
-      return res.status(404).json({ error: 'Active test session not found.' });
+    if (!req.examSession) {
+      return res.status(401).json({ error: 'Invalid or expired exam session' });
     }
 
+    const { id } = req.params;
+    const { answers, status } = req.body;
+    const studentId = req.examSession.studentId;
+
+    // ✅ FETCH submission FIRST
+    const { submissionId } = req.examSession;
+
+      const submission = await prisma.testSubmission.findUnique({
+      where: { id: submissionId }
+         });
+
+      
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // ✅ NOW safe to check status
+    if (submission.status !== 'IN_PROGRESS') {
+      return res.status(400).json({
+        error: 'Submission already finalized',
+      });
+    }
+
+    if (req.examSession.status !== 'IN_PROGRESS') {
+  return res.status(400).json({ error: 'Submission already closed' });
+}
+
+
+    // ----- scoring logic (unchanged) -----
     const correctQuestions = await prisma.question.findMany({
       where: { testId: parseInt(id) },
-      select: { id: true, correctAnswer: true }
+      select: { id: true, correctAnswer: true },
     });
 
     let score = 0;
     const answerRecords = [];
 
     for (const q of correctQuestions) {
-      const studentAnswer = answers[q.id];
+      const studentAnswer = answers?.[q.id];
       const isCorrect = studentAnswer === q.correctAnswer;
       if (isCorrect) score++;
 
@@ -310,24 +343,39 @@ export const submitTest = async (req, res) => {
         selectedAnswer: studentAnswer || 'No Answer',
         isCorrect,
         questionId: q.id,
-        submissionId: submission.id
+        submissionId: submission.id,
       });
     }
 
-    await prisma.$transaction([
-      prisma.answer.createMany({ data: answerRecords }),
-      prisma.testSubmission.update({
-        where: { id: submission.id },
-        data: { score, status: status || 'COMPLETED' }
-      })
-    ]);
+    // ✅ CORRECTED TRANSACTION BLOCK
+await prisma.$transaction([
+  // 1. Delete old draft answers
+  prisma.answer.deleteMany({ 
+    where: { submissionId: submission.id } 
+  }),
+  
+  // 2. Create final scored answer records
+  prisma.answer.createMany({ 
+    data: answerRecords 
+  }),
+  
+  // 3. Update the submission record status and score
+  prisma.testSubmission.update({
+    where: { id: submission.id },
+    data: {
+      score,
+      status: status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED',
+    },
+  }),
+]);
 
-    res.json({ message: 'Test submitted', submissionId: submission.id });
-  } catch (error) {
-    console.error('Submit error:', error);
-    res.status(500).json({ error: 'Failed to submit test' });
+    return res.json({ success: true, submissionId: submission.id });
+  } catch (err) {
+    console.error('Submit error:', err);
+    return res.status(500).json({ error: 'Failed to submit test' });
   }
 };
+
 
 /* =========================
    RESULTS

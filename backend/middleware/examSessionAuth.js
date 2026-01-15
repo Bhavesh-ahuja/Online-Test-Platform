@@ -1,19 +1,43 @@
-import { verifyExamSessionToken } from '../lib/examSessionToken.js';
+import jwt from 'jsonwebtoken';
+import prisma from '../lib/prisma.js';
 
-export const authenticateExamSession = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+export const authenticateExamSession = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Exam session token missing' });
+    return res.status(401).json({ error: 'Missing exam session token' });
   }
 
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = verifyExamSessionToken(token);
-    req.examSession = decoded;
+    const decoded = jwt.verify(token, process.env.EXAM_SESSION_SECRET);
+
+    const submission = await prisma.testSubmission.findUnique({
+      where: { id: decoded.submissionId }
+    });
+
+    // 🔴 HARD STOP: submission must exist AND be IN_PROGRESS
+    if (
+  !submission ||
+  submission.studentId !== decoded.studentId
+) {
+  return res.status(401).json({
+    error: 'Invalid exam session'
+  });
+}
+
+
+    // Attach to request (single source of truth)
+    req.examSession = {
+  submissionId: submission.id,
+  testId: submission.testId,
+  studentId: submission.studentId,
+  status: submission.status
+};
+
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Exam session expired or invalid' });
+    return res.status(401).json({ error: 'Invalid exam session token' });
   }
 };
