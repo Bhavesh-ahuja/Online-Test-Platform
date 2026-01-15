@@ -130,6 +130,8 @@ function TestPage() {
   const [submissionId, setSubmissionId] = useState(null);
   const [endTime, setEndTime] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
   
 
 
@@ -155,6 +157,8 @@ function TestPage() {
   async (status = 'COMPLETED') => {
     const examToken = sessionStorage.getItem('examSessionToken');
     const loginToken = localStorage.getItem('token');
+    if (isSubmitted) return;   // 🔒 prevent re-run
+    setIsSubmitted(true);  
      if (!examToken) {
     alert("Session expired. Please refresh.");
     return;
@@ -374,7 +378,8 @@ setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
 
       // --- Step D: Timer & Auto Submit ---
 useEffect(() => {
-  if (submissionStatus !== 'IN_PROGRESS') return;
+  if (submissionStatus !== 'IN_PROGRESS' || isSubmitted) return;
+
   if (!endTime) return;
 
   const interval = setInterval(() => {
@@ -391,7 +396,8 @@ useEffect(() => {
   }, 1000);
 
   return () => clearInterval(interval);
-}, [endTime, submissionStatus, handleSubmit]);
+}, [endTime, submissionStatus, isSubmitted, handleSubmit]);
+
 
 
   
