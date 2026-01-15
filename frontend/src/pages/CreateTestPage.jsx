@@ -1,12 +1,14 @@
+// CreateTestPage.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
 import { localToUtc } from '../utils/datetime';
 import { API_BASE_URL } from '../../config'; 
 
 function CreateTestPage() {
   const navigate = useNavigate();
 
-  // --- State Management ---
+  // State for Test Details
   const [testData, setTestData] = useState({
     title: '',
     description: '',
@@ -15,14 +17,12 @@ function CreateTestPage() {
     scheduledEnd: '',
   });
 
+  // Default start with one empty question
   const [questions, setQuestions] = useState([
-    { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' },
+    { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }
   ]);
 
   // UI & Feature States
-  const [showStartOk, setShowStartOk] = useState(false);
-  const [showEndOk, setShowEndOk] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
  
@@ -32,16 +32,52 @@ function CreateTestPage() {
   // --- Helpers ---
   const markDirty = () => setHasUnsavedChanges(true);
 
+  // Helper: Update Test Details
   const handleTestChange = (e) => {
     setTestData({ ...testData, [e.target.name]: e.target.value });
-    markDirty();
   };
 
-  const handleQuestionChange = (qi, field, value) => {
-    const copy = [...questions];
-    copy[qi][field] = value;
-    setQuestions(copy);
-    markDirty();
+  // --- Question Management ---
+  const handleQuestionChange = (index, field, value) => {
+    const newQuestions = [...questions];
+    newQuestions[index][field] = value;
+    setQuestions(newQuestions);
+  };
+
+  const addQuestion = () => {
+    setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
+  };
+
+  const removeQuestion = (index) => {
+    if (questions.length === 1) {
+      alert("Test must have at least one question.");
+      return;
+    }
+    const newQuestions = questions.filter((_, i) => i !== index);
+    setQuestions(newQuestions);
+  };
+
+  // --- Option Management ---
+  const handleOptionChange = (qIndex, oIndex, value) => {
+    const newQuestions = [...questions];
+    newQuestions[qIndex].options[oIndex] = value;
+    setQuestions(newQuestions);
+  };
+
+  const addOption = (qIndex) => {
+    const newQuestions = [...questions];
+    newQuestions[qIndex].options.push('');
+    setQuestions(newQuestions);
+  };
+
+  const removeOption = (qIndex, oIndex) => {
+    const newQuestions = [...questions];
+    if (newQuestions[qIndex].options.length <= 2) {
+      alert("MCQ must have at least 2 options.");
+      return;
+    }
+    newQuestions[qIndex].options.splice(oIndex, 1);
+    setQuestions(newQuestions);
   };
 
   const handleOptionChange = (qi, oi, value) => {
@@ -64,65 +100,41 @@ function CreateTestPage() {
     const token = localStorage.getItem('token');
     const formData = new FormData();
     formData.append('file', file);
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tests/upload-pdf`, {
+      const response = await fetch('http://localhost:8000/api/tests/upload-pdf', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // Do not set Content-Type for FormData
+        },
+        body: formData
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to upload PDF');
 
-      // If only one empty question exists, replace it; otherwise, append
-      if (questions.length === 1 && questions[0].text.trim() === '') {
+      // Logic: If the current form has only 1 empty question, replace it.
+      // Otherwise, append the new questions to the bottom.
+      if (questions.length === 1 && questions[0].text === '') {
         setQuestions(data.questions);
       } else {
-        if (window.confirm(`Found ${data.questions.length} questions. Append them to existing list?`)) {
+        // Confirmation before appending
+        if (window.confirm(`Found ${data.questions.length} questions. Append them to your existing list?`)) {
           setQuestions([...questions, ...data.questions]);
         }
       }
-      alert(`Successfully imported ${data.questions.length} questions`);
+
+      alert(`Successfully imported ${data.questions.length} questions! Review them below.`);
+
     } catch (error) {
-      alert('Import Error: ' + error.message);
+      alert("Import Error: " + error.message);
     } finally {
       setIsUploading(false);
-      e.target.value = null;
+      e.target.value = null; // Reset input
     }
   };
 
-  // --- Question Management ---
-  const addOption = (qi) => {
-    const copy = [...questions];
-    copy[qi].options.push('');
-    setQuestions(copy);
-    markDirty();
-  };
-
-  const removeOption = (qi, oi) => {
-    const copy = [...questions];
-    if (copy[qi].options.length <= 2) return;
-    copy[qi].options.splice(oi, 1);
-    setQuestions(copy);
-    markDirty();
-  };
-
-  const addQuestion = () => {
-    setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
-    markDirty();
-  };
-
-  const removeQuestion = (qi) => {
-    if (questions.length === 1) {
-      alert('At least one question is required');
-      return;
-    }
-    setQuestions(questions.filter((_, index) => index !== qi));
-    markDirty();
-  };
-
-  // --- Form Submission ---
+  // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -140,30 +152,39 @@ function CreateTestPage() {
 
     const token = localStorage.getItem('token');
 
+    // Validation: Check for empty options
+    const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
+    if (invalidMCQ) {
+      alert("All MCQ questions must have at least 2 options.");
+      return;
+    }
+
+    // Validation: Check for empty options
+    const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
+    if (invalidMCQ) {
+      alert("All MCQ questions must have at least 2 options.");
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/tests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...testData,
-          attemptType,
-          maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
-          scheduledStart: localToUtc(testData.scheduledStart),
-          scheduledEnd: localToUtc(testData.scheduledEnd),
-          questions,
-        }),
+          questions: questions
+        })
       });
 
-      if (!res.ok) throw new Error('Failed to create test');
+      if (!response.ok) throw new Error('Failed to create test');
 
-      alert('Test created successfully');
-      setHasUnsavedChanges(false);
+      alert('Test Created Successfully!');
       navigate('/dashboard');
-    } catch (err) {
-      alert(err.message);
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -171,50 +192,56 @@ function CreateTestPage() {
     <div className="container mx-auto p-6 max-w-3xl">
       <h1 className="text-3xl font-bold mb-6">Create New Test</h1>
 
-      {/* --- AI PDF IMPORT SECTION  --- */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-lg mb-8 flex flex-col sm:flex-row items-center justify-between shadow-sm">
+      {/* --- AI IMPORT SECTION --- */}
+      <div className="bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6 rounded-lg mb-8 flex flex-col sm:flex-row items-center justify-between shadow-sm">
         <div className="mb-4 sm:mb-0">
           <h3 className="font-bold text-blue-800 text-lg flex items-center">
             <span className="text-2xl mr-2">✨</span> Auto-Import
           </h3>
           <p className="text-sm text-blue-600 mt-1">
-            Upload a PDF quiz. We’ll extract questions & answers for you to review.
+            Upload a PDF quiz. We'll extract questions & answers for you to review.
           </p>
         </div>
-
         <div className="relative group">
           <input
             type="file"
             accept="application/pdf"
             onChange={handleFileUpload}
-            disabled={isUploading}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            disabled={isUploading}
           />
           <button
-            type="button"
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold shadow transition-all transform
-              ${isUploading ? 'bg-gray-400 text-gray-100 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md active:scale-95'}`}
+            className={`
+              flex items-center gap-2 px-6 py-3 rounded-lg font-semibold shadow transition-all transform
+              ${isUploading
+                ? 'bg-gray-400 text-gray-100 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md active:scale-95'}
+            `}
           >
-            {isUploading ? 'Processing…' : '📂 Upload PDF'}
+            {isUploading ? (
+              <>Processing...</>
+            ) : (
+              <>
+                <span>📂</span> Upload PDF
+              </>
+            )}
           </button>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* TEST DETAILS SECTION */}
+        {/* Test Info */}
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-          <h2 className="text-xl font-semibold border-b pb-2">Test Details</h2>
+          <h2 className="text-xl font-semibold">Test Details</h2>
+          <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
+          <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Test Title</label>
-            <input
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-              name="title"
-              value={testData.title}
-              onChange={handleTestChange}
-              required
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600">Duration (minutes)</label>
+              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+            </div>
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -315,6 +342,12 @@ function CreateTestPage() {
             </div>
           </div>
         </div>
+          {questions.map((q, qIndex) => (
+            <div key={qIndex} className="bg-white p-6 rounded-lg shadow-md border border-gray-200 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-medium bg-gray-100 px-3 py-1 rounded text-sm">Question {qIndex + 1}</h3>
+                <button type="button" onClick={() => removeQuestion(qIndex)} className="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+              </div>
 
         {/* QUESTIONS SECTION */}
         <div className="space-y-6">
@@ -371,6 +404,33 @@ function CreateTestPage() {
                   + Add Option
                 </button>
               </div>
+              <input
+                className="w-full p-3 border rounded mb-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="Enter Question Text"
+                value={q.text}
+                required
+                onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
+              />
+
+              <div className="mb-4 pl-4 border-l-2 border-gray-200">
+                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Options</p>
+                {q.options.map((opt, oIndex) => (
+                  <div key={oIndex} className="flex gap-2 mb-2">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+                      {String.fromCharCode(65 + oIndex)}
+                    </div>
+                    <input
+                      className="grow p-2 border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-400 outline-none"
+                      placeholder={`Option ${oIndex + 1}`}
+                      value={opt}
+                      required
+                      onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
+                    />
+                    <button type="button" onClick={() => removeOption(qIndex, oIndex)} className="text-red-400 hover:text-red-600 px-2 text-lg">×</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline mt-1 ml-8">+ Add Option</button>
+              </div>
 
               <div className="pt-4 border-t">
                 <label className="block text-xs font-bold text-green-600 uppercase mb-2">Set Correct Answer</label>
@@ -420,6 +480,9 @@ function CreateTestPage() {
           >
             Create Test
           </button>
+        <div className="flex gap-4 pt-4 border-t">
+          <button type="button" onClick={addQuestion} className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition">+ Add Blank Question</button>
+          <button type="submit" className="grow px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg transition transform active:scale-95">Save Test</button>
         </div>
       </form>
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { utcToLocal, localToUtc } from '../utils/datetime';
 import { API_BASE_URL } from '../../config';
@@ -17,7 +17,7 @@ function EditTestPage() {
     description: '',
     duration: 30,
     scheduledStart: '',
-    scheduledEnd: '',
+    scheduledEnd: ''
   });
 
   const [questions, setQuestions] = useState([]);
@@ -34,7 +34,6 @@ function EditTestPage() {
   useEffect(() => {
     const fetchTest = async () => {
       const token = localStorage.getItem('token');
-
       try {
         const res = await fetch(
           `${API_BASE_URL}/api/tests/${id}/admin`,
@@ -44,14 +43,19 @@ function EditTestPage() {
         if (!res.ok) throw new Error('Failed to fetch test');
 
         const data = await res.json();
+        // Format dates for input[type="datetime-local"] (YYYY-MM-DDTHH:mm)
+        const formatDate = (dateString) => {
+            if (!dateString) return '';
+            return new Date(dateString).toISOString().slice(0, 16);
+        };
 
         // Map data and convert UTC from DB to Local for the input fields
         setTestData({
           title: data.title,
           description: data.description || '',
           duration: data.duration,
-          scheduledStart: utcToLocal(data.scheduledStart),
-          scheduledEnd: utcToLocal(data.scheduledEnd),
+          scheduledStart: formatDate(data.scheduledStart),
+          scheduledEnd: formatDate(data.scheduledEnd)
         });
 
         // Load Attempt Config
@@ -65,7 +69,6 @@ function EditTestPage() {
         setLoading(false);
       }
     };
-
     fetchTest();
   }, [id, navigate]);
 
@@ -128,6 +131,15 @@ function EditTestPage() {
     setQuestions(questions.filter((_, index) => index !== qi));
     markDirty();
   };
+  const handleTestChange = (e) => setTestData({ ...testData, [e.target.name]: e.target.value });
+
+  // (Keep Question/Option Handlers exactly the same as CreatePage)
+  const handleQuestionChange = (index, field, value) => { const newQuestions = [...questions]; newQuestions[index][field] = value; setQuestions(newQuestions); };
+  const addQuestion = () => setQuestions([...questions, { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }]);
+  const removeQuestion = (index) => { if (questions.length === 1) return alert("Min 1 question."); setQuestions(questions.filter((_, i) => i !== index)); };
+  const handleOptionChange = (qIndex, oIndex, value) => { const newQuestions = [...questions]; newQuestions[qIndex].options[oIndex] = value; setQuestions(newQuestions); };
+  const addOption = (qIndex) => { const newQuestions = [...questions]; newQuestions[qIndex].options.push(''); setQuestions(newQuestions); };
+  const removeOption = (qIndex, oIndex) => { const newQuestions = [...questions]; if (newQuestions[qIndex].options.length <= 2) return alert("Min 2 options."); newQuestions[qIndex].options.splice(oIndex, 1); setQuestions(newQuestions); };
 
   // --- Form Submission ---
   const handleSubmit = async (e) => {
@@ -147,12 +159,15 @@ function EditTestPage() {
 
     const token = localStorage.getItem('token');
 
+    const invalidMCQ = questions.find(q => q.type === 'MCQ' && q.options.length < 2);
+    if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...testData,
@@ -164,13 +179,12 @@ function EditTestPage() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to update test');
+      if (!response.ok) throw new Error('Failed to update test.');
 
-      alert('Test updated successfully');
-      setHasUnsavedChanges(false);
+      alert('Test Updated Successfully!');
       navigate('/dashboard');
-    } catch (err) {
-      alert(err.message);
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -179,147 +193,29 @@ function EditTestPage() {
   return (
     <div className="container mx-auto p-6 max-w-3xl">
       <h1 className="text-3xl font-bold mb-6">Edit Test</h1>
-
+      
       <form onSubmit={handleSubmit} className="space-y-6">
 
         {/* --- TEST DETAILS SECTION --- */}
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-          <h2 className="text-xl font-semibold border-b pb-2">Test Details</h2>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Test Name</label>
-            <input
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-              name="title"
-              value={testData.title}
-              onChange={handleTestChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-              name="description"
-              rows="3"
-              value={testData.description}
-              onChange={handleTestChange}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h2 className="text-xl font-semibold">Test Details</h2>
+          <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
+          <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
+          
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duration (minutes)
-              </label>
-              <input
-                type="number"
-                min="1"
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                name="duration"
-                value={testData.duration}
-                onChange={handleTestChange}
-                required
-              />
+              <label className="block text-sm text-gray-600 mb-1">Duration (minutes)</label>
+              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
             </div>
-
-            {/* ATTEMPT SETTINGS */}
+            
+            {/* --- NEW SCHEDULED FIELDS --- */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Attempts</label>
-              <div className="flex gap-4 items-center h-10">
-                <label className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="accent-blue-600"
-                    checked={attemptType === 'ONCE'}
-                    onChange={() => { setAttemptType('ONCE'); markDirty(); }}
-                  />
-                  One attempt
-                </label>
-
-                <label className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="accent-blue-600"
-                    checked={attemptType === 'LIMITED'}
-                    onChange={() => { setAttemptType('LIMITED'); markDirty(); }}
-                  />
-                  Limited
-                </label>
-
-                <label className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="accent-blue-600"
-                    checked={attemptType === 'UNLIMITED'}
-                    onChange={() => { setAttemptType('UNLIMITED'); markDirty(); }}
-                  />
-                  Unlimited
-                </label>
-              </div>
-
-              {attemptType === 'LIMITED' && (
-                <div className="mt-2 flex items-center gap-2">
-                   <span className="text-sm text-gray-500">Max Attempts:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-20 border rounded p-1 text-center"
-                    value={maxAttempts}
-                    onChange={(e) => { setMaxAttempts(Number(e.target.value)); markDirty(); }}
-                  />
-                </div>
-              )}
+              <label className="block text-sm text-gray-600 mb-1">Start Window</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
             </div>
-          </div>
-
-          {/* SCHEDULING WITH "OK" BUTTONS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Time (Local)</label>
-              <input
-                type="datetime-local"
-                className="w-full p-2 border rounded pr-14 focus:ring-2 focus:ring-blue-500 outline-none"
-                name="scheduledStart"
-                value={testData.scheduledStart}
-                onChange={(e) => {
-                  handleTestChange(e);
-                  setShowStartOk(true);
-                }}
-              />
-              {showStartOk && (
-                <button
-                  type="button"
-                  className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded shadow-sm"
-                  onClick={() => setShowStartOk(false)}
-                >
-                  OK
-                </button>
-              )}
-            </div>
-
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Time (Local)</label>
-              <input
-                type="datetime-local"
-                className="w-full p-2 border rounded pr-14 focus:ring-2 focus:ring-blue-500 outline-none"
-                name="scheduledEnd"
-                value={testData.scheduledEnd}
-                onChange={(e) => {
-                  handleTestChange(e);
-                  setShowEndOk(true);
-                }}
-              />
-              {showEndOk && (
-                <button
-                  type="button"
-                  className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded shadow-sm"
-                  onClick={() => setShowEndOk(false)}
-                >
-                  OK
-                </button>
-              )}
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">End Window</label>
+              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
             </div>
           </div>
         </div>
@@ -399,6 +295,8 @@ function EditTestPage() {
                   ))}
                 </select>
               </div>
+
+              <input className="w-full p-2 border rounded border-green-200 bg-green-50" placeholder="Correct Answer" value={q.correctAnswer} required onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
             </div>
           ))}
 

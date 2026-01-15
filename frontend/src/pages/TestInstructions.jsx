@@ -6,8 +6,22 @@ const TestInstructions = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const handleStartTest = () => {
+  const handleStartTest = async () => {
     if (!accepted) return;
+
+    // Security Feature: Full Screen Mode
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+        await document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+        await document.documentElement.msRequestFullscreen();
+      }
+    } catch (err) {
+      console.warn("Could not enter full screen automatically:", err);
+    }
+
     navigate(`/test/${id}`);
   };
 
@@ -41,6 +55,7 @@ const TestInstructions = () => {
         <ul className="space-y-2 text-gray-700 text-sm leading-relaxed">
           <li>• The test has a fixed duration and a running timer.</li>
           <li>• Do not switch tabs or minimize the browser.</li>
+          <li>• <strong>The test will run in Full-Screen mode. Exiting full-screen is a violation.</strong></li>
           <li>• Multiple violations may terminate the test.</li>
           <li>• The test auto-submits when time ends.</li>
           <li>• Once submitted, answers cannot be changed.</li>
