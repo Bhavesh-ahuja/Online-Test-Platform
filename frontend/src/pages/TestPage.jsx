@@ -148,8 +148,8 @@ function TestPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
    const hasRestoredRef = useRef(false);
    const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+  const timerIntervalRef = useRef(null);
 
-  
 
 
 
@@ -174,6 +174,11 @@ function TestPage() {
   // --- 4. Submission Logic ---
   const handleSubmit = useCallback(
   async (status = 'COMPLETED') => {
+    if (timerIntervalRef.current) {
+  clearInterval(timerIntervalRef.current);
+  timerIntervalRef.current = null;
+   }
+
     const examToken = sessionStorage.getItem('examSessionToken');
     const loginToken = localStorage.getItem('token');
     if (isSubmitted) return;   // 🔒 prevent re-run
@@ -361,6 +366,18 @@ useEffect(() => {
   let isMounted = true;
 
   const initTest = async () => {
+    // 🔥 HARD RESET for fresh attempt
+setIsSubmitted(false);
+setSubmissionStatus(null);
+setEndTime(null);
+setTimeLeft(null);
+hasRestoredRef.current = false;
+
+if (timerIntervalRef.current) {
+  clearInterval(timerIntervalRef.current);
+  timerIntervalRef.current = null;
+}
+
     const loginToken = localStorage.getItem('token');
     if (!loginToken) {
       navigate('/login');
@@ -440,23 +457,29 @@ setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
       // --- Step D: Timer & Auto Submit ---
 useEffect(() => {
   if (submissionStatus !== 'IN_PROGRESS' || isSubmitted) return;
-
   if (!endTime) return;
 
-  const interval = setInterval(() => {
+  timerIntervalRef.current = setInterval(() => {
     const remaining = Math.max(
       0,
       Math.floor((endTime - Date.now()) / 1000)
     );
+
     setTimeLeft(remaining);
 
     if (remaining === 0) {
-      clearInterval(interval);
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
       handleSubmit('TIMEOUT');
     }
   }, 1000);
 
-  return () => clearInterval(interval);
+  return () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  };
 }, [endTime, submissionStatus, isSubmitted, handleSubmit]);
 
 

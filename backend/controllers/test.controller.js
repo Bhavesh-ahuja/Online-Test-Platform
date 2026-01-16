@@ -148,7 +148,9 @@ const submissions = await prisma.testSubmission.findMany({
 });
 
 const inProgress = submissions.find(s => s.status === 'IN_PROGRESS');
-const completedCount = submissions.filter(s => s.status !== 'IN_PROGRESS').length;
+const completedCount = submissions.filter(
+  s => s.status === 'COMPLETED' || s.status === 'TIMEOUT' || s.status === 'TERMINATED'
+).length;
 
 // 1️⃣ Resume if already IN_PROGRESS
 if (inProgress) {
@@ -165,28 +167,33 @@ if (inProgress) {
     submissionId: inProgress.id,
     examSessionToken,
     // ADD THIS LINE:
-    draft: inProgress.answersDraft 
+    draft: inProgress.answersDraft ?? null
+
   });
 }
 
 // 2️⃣ Block if attempts exhausted
-if (test.attemptType === 'ONCE' && completedCount >= 1) {
-  return res.status(403).json({
-    error: 'Test already completed',
-    finalSubmissionId: submissions[0].id
-  });
-}
-
 if (
   test.attemptType === 'LIMITED' &&
   test.maxAttempts !== null &&
   completedCount >= test.maxAttempts
 ) {
-  return res.status(403).json({
-    error: 'Maximum attempts reached',
-    finalSubmissionId: submissions[0].id
-  });
+  // Block ONLY if no IN_PROGRESS attempt exists
+  const hasInProgress = submissions.some(
+    s => s.status === 'IN_PROGRESS'
+  );
+
+  if (!hasInProgress) {
+    return res.status(403).json({
+      error: 'Maximum attempts reached',
+      finalSubmissionId: submissions[0]?.id
+    });
+  }
 }
+
+
+// ⛔ UNLIMITED → do nothing, always allow
+
 
 // 3️⃣ Create NEW submission (allowed)
 const submission = await prisma.testSubmission.create({
