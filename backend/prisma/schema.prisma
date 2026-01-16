@@ -81,7 +81,8 @@ model TestSubmission {
   id        Int      @id @default(autoincrement())
   status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
- 
+   
+  score        Int      @default(0)
   answersDraft  Json?  
 
   testId Int
