@@ -376,13 +376,7 @@ function CreateTestPage() {
                   + Add Option
                 </button>
               </div>
-              <input
-                className="w-full p-3 border rounded mb-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Enter Question Text"
-                value={q.text}
-                required
-                onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
-              />
+              
 
               
               <div className="pt-4 border-t">

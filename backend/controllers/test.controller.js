@@ -47,8 +47,16 @@ export const createTest = async (req, res) => {
 
 export const updateTest = async (req, res) => {
   const { id } = req.params;
-  const { title, description, duration, questions, scheduledStart, scheduledEnd } = req.body;
-  // const userId = req.user.userId;
+  const {
+  title,
+  description,
+  duration,
+  questions,
+  scheduledStart,
+  scheduledEnd,
+  attemptType,
+  maxAttempts,
+} = req.body;
 
   try {
     // 1. Check if test exists and belongs to user (or is admin)
@@ -64,12 +72,15 @@ export const updateTest = async (req, res) => {
 
     // 3. Prepare Update Data
     const updateData = {
-      title,
-      description,
-      duration: parseInt(duration),
-      scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
-      scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
-    };
+  title,
+  description,
+  duration: parseInt(duration),
+  scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+  scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
+  attemptType,
+  maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
+};
+
 
     // 4. Handle Questions Logic
     if (questions && questions.length > 0) {
