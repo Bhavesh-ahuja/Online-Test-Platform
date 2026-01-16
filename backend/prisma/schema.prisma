@@ -19,11 +19,18 @@ enum Role {
   ADMIN
 }
 
+enum AttemptType {
+  ONCE
+  LIMITED
+  UNLIMITED
+}
+
+
 // Defines the User table
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   
+  password  String
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -35,17 +42,18 @@ model User {
 
 // Defines the Test table
 model Test {
-  id          Int        @id @default(autoincrement())
-  title       String
-  description String?
-  duration    Int        // Duration in minutes
-  createdAt   DateTime   @default(now())
+  id             Int       @id @default(autoincrement())
+  title          String
+  description    String?
+  duration       Int
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  createdAt      DateTime  @default(now())
 
-  // Scheduling
-  scheduledStart DateTime?  //Optional: If null, starts immediately
-  scheduledEnd   DateTime?  //Optional: If null, never expires
-  
-  // Relation: Test belongs to a User (Admin)
+  // New Features
+  attemptType AttemptType @default(ONCE)
+  maxAttempts Int?
+
   createdById Int
   createdBy   User       @relation(fields: [createdById], references: [id])
   
@@ -71,15 +79,18 @@ model Question {
 
 model TestSubmission {
   id        Int      @id @default(autoincrement())
-  score     Int
   status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
-  
-  // Relations
+   
+  score        Int      @default(0)
+  answersDraft  Json?  
+
+  testId Int
+  test   Test @relation(fields: [testId], references: [id])
+
   studentId Int
   student   User     @relation(fields: [studentId], references: [id])
-  testId    Int
-  test      Test     @relation(fields: [testId], references: [id])
+  
   answers   Answer[] // A submission is made up of many answers
 }
 

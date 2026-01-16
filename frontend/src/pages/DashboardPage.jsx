@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../config'; // ✅ FROM 1st VERSION
 import Modal from '../components/Modal';
+import { authFetch } from "../utils/authFetch";
 
 function DashboardPage() {
   const [tests, setTests] = useState([]);
@@ -22,9 +23,8 @@ function DashboardPage() {
     if (!token) return navigate('/login');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tests`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await authFetch("/api/tests");
+
 
       if (!response.ok) throw new Error('Failed to fetch tests');
 
@@ -54,13 +54,10 @@ function DashboardPage() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/tests/${testToDelete.id}`,
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
+      const response = await authFetch(`/api/tests/${testToDelete.id}`, {
+  method: "DELETE",
+});
+
 
       const data = await response.json();
 

@@ -19,9 +19,8 @@ function AdminResultsPage() {
       if (!token) return navigate('/login');
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submissions`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await authFetch(`/api/tests/${id}/submissions`);
+
 
         if (!response.ok) throw new Error('Failed to fetch submissions');
         const data = await response.json();

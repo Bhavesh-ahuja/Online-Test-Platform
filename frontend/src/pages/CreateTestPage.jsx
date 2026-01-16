@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
+import { localToUtc } from '../utils/datetime';
+ 
 
 function CreateTestPage() {
   const navigate = useNavigate();
@@ -20,7 +22,20 @@ function CreateTestPage() {
     { text: '', type: 'MCQ', options: ['', ''], correctAnswer: '' }
   ]);
 
+  // UI & Feature States
   const [isUploading, setIsUploading] = useState(false);
+  
+ 
+  const [attemptType, setAttemptType] = useState('ONCE');
+  const [maxAttempts, setMaxAttempts] = useState(1);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showStartOk, setShowStartOk] = useState(false);
+  const [showEndOk, setShowEndOk] = useState(false);
+
+
+
+  // --- Helpers ---
+  const markDirty = () => setHasUnsavedChanges(true);
 
   // Helper: Update Test Details
   const handleTestChange = (e) => {
@@ -48,29 +63,35 @@ function CreateTestPage() {
   };
 
   // --- Option Management ---
-  const handleOptionChange = (qIndex, oIndex, value) => {
+
+  const addOption = (qi) => {
     const newQuestions = [...questions];
-    newQuestions[qIndex].options[oIndex] = value;
+    newQuestions[qi].options.push('');
     setQuestions(newQuestions);
   };
 
-  const addOption = (qIndex) => {
+  const removeOption = (qi, oIndex) => {
     const newQuestions = [...questions];
-    newQuestions[qIndex].options.push('');
-    setQuestions(newQuestions);
-  };
-
-  const removeOption = (qIndex, oIndex) => {
-    const newQuestions = [...questions];
-    if (newQuestions[qIndex].options.length <= 2) {
+    if (newQuestions[qi].options.length <= 2) {
       alert("MCQ must have at least 2 options.");
       return;
     }
-    newQuestions[qIndex].options.splice(oIndex, 1);
+    newQuestions[qi].options.splice(oIndex, 1);
     setQuestions(newQuestions);
   };
 
-  // --- PDF Management ---
+  const handleOptionChange = (qi, oi, value) => {
+    const copy = [...questions];
+    // Sync correctAnswer if the text of the currently selected correct option changes
+    if (copy[qi].correctAnswer === copy[qi].options[oi]) {
+      copy[qi].correctAnswer = value;
+    }
+    copy[qi].options[oi] = value;
+    setQuestions(copy);
+    markDirty();
+  };
+
+  // --- PDF Auto-Import Feature ---
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -80,7 +101,7 @@ function CreateTestPage() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await fetch('http://localhost:8000/api/tests/upload-pdf', {
+      const res = await fetch('http://localhost:8000/api/tests/upload-pdf', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -89,8 +110,8 @@ function CreateTestPage() {
         body: formData
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to upload PDF');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload PDF');
 
       // Logic: If the current form has only 1 empty question, replace it.
       // Otherwise, append the new questions to the bottom.
@@ -116,6 +137,19 @@ function CreateTestPage() {
   // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validation
+    for (const q of questions) {
+      if (!q.text || q.text.trim() === '') {
+        alert('Question text cannot be empty');
+        return;
+      }
+      if (!q.correctAnswer) {
+        alert(`Question "${q.text.substring(0,20)}..." is missing a correct answer selection`);
+        return;
+      }
+    }
+
     const token = localStorage.getItem('token');
 
     // Validation: Check for empty options
@@ -126,7 +160,7 @@ function CreateTestPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/tests', {
+      const res = await fetch(`${API_BASE_URL}/api/tests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,7 +172,7 @@ function CreateTestPage() {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to create test');
+      if (!res.ok) throw new Error('Failed to create test');
 
       alert('Test Created Successfully!');
       navigate('/dashboard');
@@ -146,6 +180,7 @@ function CreateTestPage() {
       alert(error.message);
     }
   };
+  
 
   return (
     <div className="container mx-auto p-6 max-w-3xl">
@@ -195,86 +230,209 @@ function CreateTestPage() {
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
 
-          <div className="grid grid-cols-2 gap-4">
+        
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600">Duration (minutes)</label>
-              <input type="number" className="w-full p-2 border rounded" name="duration" required value={testData.duration} onChange={handleTestChange} />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+              <input
+                type="number"
+                min="1"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                name="duration"
+                value={testData.duration}
+                onChange={handleTestChange}
+                required
+              />
             </div>
 
-
+            {/* ATTEMPT SETTINGS [cite: 2] */}
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Start Window (Optional)</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledStart" value={testData.scheduledStart} onChange={handleTestChange} />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Attempts</label>
+              <div className="flex gap-4 items-center h-10">
+                {['ONCE', 'LIMITED', 'UNLIMITED'].map((type) => (
+                  <label key={type} className="flex items-center gap-1 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      className="accent-blue-600"
+                      checked={attemptType === type}
+                      onChange={() => { setAttemptType(type); markDirty(); }}
+                    />
+                    {type.charAt(0) + type.slice(1).toLowerCase()}
+                  </label>
+                ))}
+              </div>
+              {attemptType === 'LIMITED' && (
+                <div className="mt-2 flex items-center gap-2 animate-fadeIn">
+                  <span className="text-sm text-gray-500">Max:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-20 border rounded p-1 text-center"
+                    value={maxAttempts}
+                    onChange={(e) => { setMaxAttempts(Number(e.target.value)); markDirty(); }}
+                  />
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">End Window (Optional)</label>
-              <input type="datetime-local" className="w-full p-2 border rounded" name="scheduledEnd" value={testData.scheduledEnd} onChange={handleTestChange} />
+          </div>
+
+          {/* SCHEDULING WITH "OK" BUTTONS [cite: 2] */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Time (Local)</label>
+              <input
+                type="datetime-local"
+                className="w-full p-2 border rounded pr-14 focus:ring-2 focus:ring-blue-500 outline-none"
+                name="scheduledStart"
+                value={testData.scheduledStart}
+                onChange={(e) => { handleTestChange(e); setShowStartOk(true); }}
+              />
+              {showStartOk && (
+                <button
+                  type="button"
+                  className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded shadow-sm hover:bg-green-700"
+                  onClick={() => setShowStartOk(false)}
+                >
+                  OK
+                </button>
+              )}
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Time (Local)</label>
+              <input
+                type="datetime-local"
+                className="w-full p-2 border rounded pr-14 focus:ring-2 focus:ring-blue-500 outline-none"
+                name="scheduledEnd"
+                value={testData.scheduledEnd}
+                onChange={(e) => { handleTestChange(e); setShowEndOk(true); }}
+              />
+              {showEndOk && (
+                <button
+                  type="button"
+                  className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded shadow-sm hover:bg-green-700"
+                  onClick={() => setShowEndOk(false)}
+                >
+                  OK
+                </button>
+              )}
             </div>
           </div>
         </div>
+         
 
-        {/* Questions List */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-end">
-            <h2 className="text-xl font-semibold">Questions ({questions.length})</h2>
-          </div>
+        {/* QUESTIONS SECTION */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold border-b pb-2">Questions ({questions.length})</h2>
 
-          {questions.map((q, qIndex) => (
-            <div key={qIndex} className="bg-white p-6 rounded-lg shadow-md border border-gray-200 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium bg-gray-100 px-3 py-1 rounded text-sm">Question {qIndex + 1}</h3>
-                <button type="button" onClick={() => removeQuestion(qIndex)} className="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+          {questions.map((q, qi) => (
+            <div key={qi} className="bg-white p-6 rounded-lg shadow-md border border-gray-100 relative group animate-fadeIn">
+              <button
+                type="button"
+                onClick={() => removeQuestion(qi)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white flex items-center justify-center"
+                title="Remove Question"
+              >
+                🗑️
+              </button>
+
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Question {qi + 1}</label>
+                <input
+                  className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white"
+                  placeholder="Enter question text..."
+                  value={q.text}
+                  onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
+                  required
+                />
               </div>
 
-              <input
-                className="w-full p-3 border rounded mb-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Enter Question Text"
-                value={q.text}
-                required
-                onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
-              />
-
-              <div className="mb-4 pl-4 border-l-2 border-gray-200">
-                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Options</p>
-                {q.options.map((opt, oIndex) => (
-                  <div key={oIndex} className="flex gap-2 mb-2">
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-xs font-bold text-gray-600">
-                      {String.fromCharCode(65 + oIndex)}
-                    </div>
+              <div className="space-y-2 mb-4">
+                <label className="block text-xs font-bold text-gray-400 uppercase">Options</label>
+                {q.options.map((opt, oi) => (
+                  <div key={oi} className="flex gap-2 items-center">
+                    <span className="text-gray-400 font-mono text-sm w-4">{String.fromCharCode(65 + oi)}</span>
                     <input
-                      className="grow p-2 border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-400 outline-none"
-                      placeholder={`Option ${oIndex + 1}`}
+                      className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
+                      placeholder={`Option ${oi + 1}`}
                       value={opt}
+                      onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
                       required
-                      onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
                     />
-                    <button type="button" onClick={() => removeOption(qIndex, oIndex)} className="text-red-400 hover:text-red-600 px-2 text-lg">×</button>
+                    <button
+                      type="button"
+                      className="text-gray-300 hover:text-red-500 transition"
+                      onClick={() => removeOption(qi, oi)}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
-                <button type="button" onClick={() => addOption(qIndex)} className="text-sm text-blue-600 hover:underline mt-1 ml-8">+ Add Option</button>
+                <button
+                  type="button"
+                  className="text-blue-600 text-xs font-semibold hover:underline mt-1 ml-6"
+                  onClick={() => addOption(qi)}
+                >
+                  + Add Option
+                </button>
               </div>
+              
 
-              <div>
-                <label className="text-xs font-bold text-green-600 uppercase block mb-1">Correct Answer</label>
-                <input
-                  className="w-full p-2 border rounded border-green-200 bg-green-50 focus:ring-1 focus:ring-green-500 outline-none"
-                  placeholder="Paste the correct answer here (must match an option exactly)"
+              
+              <div className="pt-4 border-t">
+                <label className="block text-xs font-bold text-green-600 uppercase mb-2">Set Correct Answer</label>
+                <select
+                  className="w-full p-2 border rounded bg-green-50 text-sm focus:ring-2 focus:ring-green-500 outline-none"
                   value={q.correctAnswer}
+                  onChange={(e) => handleQuestionChange(qi, 'correctAnswer', e.target.value)}
                   required
-                  onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}
-                />
-                <p className="text-xs text-gray-400 mt-1">Make sure this text matches one of the options above exactly.</p>
+                >
+                  <option value="">-- Select the correct option --</option>
+                  {q.options.map((opt, oi) => (
+                    <option key={oi} value={opt}>
+                      {opt || `Option ${oi + 1} (Empty)`}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           ))}
+
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-blue-400 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">+</span> Add New Question
+          </button>
         </div>
 
-        <div className="flex gap-4 pt-4 border-t">
-          <button type="button" onClick={addQuestion} className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition">+ Add Blank Question</button>
-          <button type="submit" className="grow px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg transition transform active:scale-95">Save Test</button>
-        </div>
+        {/* FINAL ACTION BUTTONS */}
+<div className="flex gap-4 pt-6">
+  <button
+    type="button"
+    onClick={() => {
+      if (!hasUnsavedChanges || window.confirm('You have unsaved changes. Discard them?')) {
+        navigate('/dashboard');
+      }
+    }}
+    className="w-1/3 bg-gray-100 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition"
+  >
+    Cancel
+  </button>
+
+  <button
+    type="submit"
+    className="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition transform active:scale-95"
+  >
+    Create Test
+  </button>
+</div>
+
+        
       </form>
     </div>
+    
   );
 }
 
