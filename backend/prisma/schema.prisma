@@ -19,6 +19,13 @@ enum Role {
   ADMIN
 }
 
+enum AttemptType {
+  ONCE
+  LIMITED
+  UNLIMITED
+}
+
+
 // Defines the User table
 model User {
   id        Int      @id @default(autoincrement())
@@ -72,8 +79,6 @@ model Question {
 
 model TestSubmission {
   id        Int      @id @default(autoincrement())
-  status    String   @default("COMPLETED")
-  score     Int
   status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
  
@@ -84,8 +89,7 @@ model TestSubmission {
 
   studentId Int
   student   User     @relation(fields: [studentId], references: [id])
-  testId    Int
-  test      Test     @relation(fields: [testId], references: [id])
+  
   answers   Answer[] // A submission is made up of many answers
 }
 
