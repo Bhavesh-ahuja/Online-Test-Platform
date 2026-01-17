@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../components/Modal';
-import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
+import { API_BASE_URL } from '../config';  // Adjust path (../ or ./) based on file location
 
 /* --------------------------------------------------------
    Global Constants & Helpers

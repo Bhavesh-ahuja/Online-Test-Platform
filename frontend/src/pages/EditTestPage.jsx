@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { utcToLocal, localToUtc } from "../utils/datetime.js";
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL } from '../config';
 
 function EditTestPage() {
   const { id } = useParams();

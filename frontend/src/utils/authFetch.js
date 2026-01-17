@@ -1,5 +1,5 @@
 // src/utils/authFetch.js
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL } from "../config";
 
 let isRedirecting = false;
 

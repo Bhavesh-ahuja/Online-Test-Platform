@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
+import { API_BASE_URL } from '../config';  // Adjust path (../ or ./) based on file location
 
 function ResultsPage() {
   const { submissionId } = useParams();
