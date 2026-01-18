@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
 
 function EditTestPage() {
   const { id } = useParams();
@@ -21,7 +22,7 @@ function EditTestPage() {
     const fetchTest = async () => {
       const token = localStorage.getItem('token');
       try {
-        const response = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to fetch test');
@@ -69,7 +70,7 @@ function EditTestPage() {
     if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
 
     try {
-      const response = await fetch(`http://localhost:8000/api/tests/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
