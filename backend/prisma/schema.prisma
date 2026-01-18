@@ -10,7 +10,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -68,7 +68,7 @@ model Question {
   id            Int      @id @default(autoincrement())
   text          String
   type          String   // "MCQ" or "SHORT"
-  options       String[] // Array of options for MCQ
+  options       Json // Array of options for MCQ (MySQL doesn't support String[])
   correctAnswer String?  // Optional for short answers
   
   // Relation: Question belongs to a Test
