@@ -2,9 +2,14 @@
 import prisma from '../lib/prisma.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { createExamSessionToken } from '../lib/examSessionToken.js';
 
 
-// Create a new test with questions
+
+
+/* =========================
+   CREATE TEST
+========================= */
 export const createTest = async (req, res) => {
   const { title, description, duration, questions, scheduledStart, scheduledEnd } = req.body;
   const userId = req.user.userId;  //Got from auth middleware
@@ -42,8 +47,16 @@ export const createTest = async (req, res) => {
 
 export const updateTest = async (req, res) => {
   const { id } = req.params;
-  const { title, description, duration, questions, scheduledStart, scheduledEnd } = req.body;
-  // const userId = req.user.userId;
+  const {
+  title,
+  description,
+  duration,
+  questions,
+  scheduledStart,
+  scheduledEnd,
+  attemptType,
+  maxAttempts,
+} = req.body;
 
   try {
     // 1. Check if test exists and belongs to user (or is admin)
@@ -59,12 +72,15 @@ export const updateTest = async (req, res) => {
 
     // 3. Prepare Update Data
     const updateData = {
-      title,
-      description,
-      duration: parseInt(duration),
-      scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
-      scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
-    };
+  title,
+  description,
+  duration: parseInt(duration),
+  scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+  scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
+  attemptType,
+  maxAttempts: attemptType === 'LIMITED' ? maxAttempts : null,
+};
+
 
     // 4. Handle Questions Logic
     if (questions && questions.length > 0) {
@@ -98,6 +114,9 @@ export const updateTest = async (req, res) => {
   }
 };
 
+/* =========================
+   START TEST (ATTEMPTS)
+========================= */
 export const startTest = async (req, res) => {
   const { id } = req.params;
   const studentId = req.user.userId;
@@ -116,38 +135,98 @@ export const startTest = async (req, res) => {
       return res.status(403).json({ error: 'Test window has closed.' });
     }
 
-    // 2. Check for existing submission
-    let submission = await prisma.testSubmission.findFirst({
-      where: { testId: parseInt(id), studentId: studentId }
-    });
+    // ===============================
+// ATTEMPT & RESUME LOGIC (FIXED)
+// ===============================
 
-    // 3. Create or Resume
-    if (!submission) {
-      submission = await prisma.testSubmission.create({
-        data: {
-          test: {
-            connect: { id: parseInt(id) }
-          },
-          student: {
-            connect: { id: studentId }
-          },
-          status: 'IN_PROGRESS',
-          score: 0
-        }
-      });
-    } else {
-      if (submission.status !== 'IN_PROGRESS') {
-        return res.status(403).json({ error: 'Test already completed.' });
-      }
-    }
+const submissions = await prisma.testSubmission.findMany({
+  where: {
+    testId: parseInt(id),
+    studentId
+  },
+  orderBy: { createdAt: 'desc' }
+});
+
+const inProgress = submissions.find(s => s.status === 'IN_PROGRESS');
+const completedCount = submissions.filter(
+  s => s.status === 'COMPLETED' || s.status === 'TIMEOUT' || s.status === 'TERMINATED'
+).length;
+
+// 1️⃣ Resume if already IN_PROGRESS
+if (inProgress) {
+  const examSessionToken = createExamSessionToken({
+    submissionId: inProgress.id,
+    testId: test.id,
+    studentId: inProgress.studentId,
+    expiresInSeconds: test.duration * 60 + 15 * 60
+  });
+
+  return res.json({
+    message: 'Resuming test',
+    startTime: inProgress.createdAt,
+    submissionId: inProgress.id,
+    examSessionToken,
+    // ADD THIS LINE:
+    draft: inProgress.answersDraft ?? null
+
+  });
+}
+
+// 2️⃣ Block if attempts exhausted
+if (
+  test.attemptType === 'LIMITED' &&
+  test.maxAttempts !== null &&
+  completedCount >= test.maxAttempts
+) {
+  // Block ONLY if no IN_PROGRESS attempt exists
+  const hasInProgress = submissions.some(
+    s => s.status === 'IN_PROGRESS'
+  );
+
+  if (!hasInProgress) {
+    return res.status(403).json({
+      error: 'Maximum attempts reached',
+      finalSubmissionId: submissions[0]?.id
+    });
+  }
+}
+
+
+// ⛔ UNLIMITED → do nothing, always allow
+
+
+// 3️⃣ Create NEW submission (allowed)
+const submission = await prisma.testSubmission.create({
+  data: {
+    testId: parseInt(id),
+    studentId,
+    status: 'IN_PROGRESS',
+    score: 0
+  }
+});
+
+    
+
+    
+
+    const durationInSeconds = test.duration * 60;
+    const bufferInSeconds = 15 * 60; // 15 min buffer
+
+    const examSessionToken = createExamSessionToken({
+    submissionId: submission.id,
+     testId: test.id,
+    studentId: submission.studentId,
+     expiresInSeconds: durationInSeconds + bufferInSeconds
+     });
 
     // 4. Return Session Data
     res.json({
       message: 'Test started',
       startTime: submission.createdAt,
-      submissionId: submission.id
+      submissionId: submission.id,
+      examSessionToken
     });
-
+  
   } catch (error) {
     console.error("Start test error:", error);
     res.status(500).json({ error: 'Failed to start test' });
@@ -203,48 +282,75 @@ export const getTestById = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch test' });
   }
 };
+// Admin: get test with correct answers
+export const getTestByIdForAdmin = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const test = await prisma.test.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        questions: true // admins CAN see correct answers
+      }
+    });
+
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    res.json(test);
+  } catch (error) {
+    console.error('Fetch test (admin) error:', error);
+    res.status(500).json({ error: 'Failed to fetch test (admin)' });
+  }
+};
 
 
 export const submitTest = async (req, res) => {
-  const { id } = req.params;
-  const { answers, status } = req.body;
-  const studentId = req.user.userId;
-
   try {
-    const submission = await prisma.testSubmission.findFirst({
-      where: {
-        testId: parseInt(id),
-        studentId: studentId,
-        status: 'IN_PROGRESS'
-      },
-      include: { test: true }
-    });
+    if (!req.examSession) {
+      return res.status(401).json({ error: 'Invalid or expired exam session' });
+    }
 
+    const { id } = req.params;
+    const { answers, status } = req.body;
+    const studentId = req.examSession.studentId;
+
+    // ✅ FETCH submission FIRST
+    const { submissionId } = req.examSession;
+
+      const submission = await prisma.testSubmission.findUnique({
+      where: { id: submissionId }
+         });
+
+      
     if (!submission) {
-      return res.status(404).json({ error: 'Active test session not found.' });
+      return res.status(404).json({ error: 'Submission not found' });
     }
 
-    // Server-Side Time Validation
-    const now = new Date();
-    const startTime = new Date(submission.createdAt);
-    const durationInMs = submission.test.duration * 60 * 1000;
-    const bufferInMs = 2 * 60 * 1000; // 2 min buffer for network latency
-
-    if (status === 'COMPLETED' && (now - startTime > durationInMs + bufferInMs)) {
-      console.warn(`Late submission by user ${studentId}`);
-      // You can mark as TIMEOUT or just proceed. We'll proceed but log it.
+    // ✅ NOW safe to check status
+    if (submission.status !== 'IN_PROGRESS') {
+      return res.status(400).json({
+        error: 'Submission already finalized',
+      });
     }
 
+    if (req.examSession.status !== 'IN_PROGRESS') {
+  return res.status(400).json({ error: 'Submission already closed' });
+}
+
+
+    // ----- scoring logic (unchanged) -----
     const correctQuestions = await prisma.question.findMany({
       where: { testId: parseInt(id) },
-      select: { id: true, correctAnswer: true }
+      select: { id: true, correctAnswer: true },
     });
 
     let score = 0;
     const answerRecords = [];
 
     for (const q of correctQuestions) {
-      const studentAnswer = answers[q.id];
+      const studentAnswer = answers?.[q.id];
       const isCorrect = studentAnswer === q.correctAnswer;
       if (isCorrect) score++;
 
@@ -252,29 +358,43 @@ export const submitTest = async (req, res) => {
         selectedAnswer: studentAnswer || "No Answer",
         isCorrect: isCorrect,
         questionId: q.id,
-        submissionId: submission.id
+        submissionId: submission.id,
       });
     }
 
-    await prisma.$transaction([
-      prisma.answer.createMany({ data: answerRecords }),
-      prisma.testSubmission.update({
-        where: { id: submission.id },
-        data: {
-          score: score,
-          status: status || 'COMPLETED',
-        }
-      })
-    ]);
+    // ✅ CORRECTED TRANSACTION BLOCK
+await prisma.$transaction([
+  // 1. Delete old draft answers
+  prisma.answer.deleteMany({ 
+    where: { submissionId: submission.id } 
+  }),
+  
+  // 2. Create final scored answer records
+  prisma.answer.createMany({ 
+    data: answerRecords 
+  }),
+  
+  // 3. Update the submission record status and score
+  prisma.testSubmission.update({
+    where: { id: submission.id },
+    data: {
+      score,
+      status: status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED',
+    },
+  }),
+]);
 
-    res.status(200).json({ message: 'Test submitted', submissionId: submission.id });
-
-  } catch (error) {
-    console.error("Submit error:", error);
-    res.status(500).json({ error: 'Failed to submit test' });
+    return res.json({ success: true, submissionId: submission.id });
+  } catch (err) {
+    console.error('Submit error:', err);
+    return res.status(500).json({ error: 'Failed to submit test' });
   }
 };
 
+
+/* =========================
+   RESULTS
+========================= */
 export const getTestResult = async (req, res) => {
   const { submissionId } = req.params;
   const studentId = req.user.userId;
@@ -462,5 +582,33 @@ export const uploadTestPDF = async (req, res) => {
   } catch (error) {
     console.error("PDF Upload Error:", error);
     res.status(500).json({ error: "Failed to process PDFDataRangeTransport." });
+  }
+};
+
+export const autosaveTestProgress = async (req, res) => {
+  try {
+    // Use the verified data from the middleware
+    const studentId = req.examSession.studentId;
+    const submissionId = req.examSession.submissionId;
+    const testId = req.examSession.testId;
+    
+    const { answers, markedQuestions } = req.body;
+
+    // The middleware already confirmed this submission exists and is IN_PROGRESS
+    await prisma.testSubmission.update({
+      where: { id: submissionId },
+      data: {
+        answersDraft: {
+          answers,
+          markedQuestions,
+          updatedAt: new Date()
+        }
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Autosave error:', error);
+    res.status(500).json({ error: 'Autosave failed' });
   }
 };
