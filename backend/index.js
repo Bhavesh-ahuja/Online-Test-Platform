@@ -2,11 +2,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import prisma from './lib/prisma.js';
 
 // Import routes
 import authRoutes from './routes/auth.routes.js';
 import testRoutes from './routes/test.routes.js';
+import userRoutes from './routes/test.routes.js';
 
 // Initialize dotenv to load .env variables
 dotenv.config();
@@ -24,47 +24,13 @@ app.use(express.json());
 
 // --- API Routes ---
 
-// Default (home)
-app.get("/", (req, res) => {
-  res.send("API is working!");
-});
-
 // All routes in 'authRoutes' will be prefixed with /api/auth
 app.use('/api/auth', authRoutes);
 
-// All routes in 'authRoutes' will be prefixed with /api/auth
+// All routes in 'testRoutes' will be prefixed with /api/tests
 app.use('/api/tests', testRoutes);
 
-// Simple test route
-app.get('/api/test', (req, res) =>{
-    res.json({ message: 'Backend is running!' });
-});
-
-// GET all users (Good for testing)
-// This is an async function because database queries take time
-app.get('/api/users', async (req, res) =>{
-    try{
-    // Use Prisma to find all users in the database
-    const users = await prisma.user.findMany({
-      // Don't send back passwords!
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-    // Send the list of users as a JSON response
-    res.json(users);
-    } catch (error) {
-    // If something goes wrong, send a 500 error
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-
-import userRoutes from './routes/user.routes.js';
-
+// All routes in 'userRoutes' will be prefixed with /api/users
 app.use('/api/users', userRoutes);
 
 // --- Start the Server ---
