@@ -165,7 +165,7 @@ function LoginPage() {
           </div>
           
           {/* Decorative Glow behind the form */}
-          <div className="absolute -inset-4 bg-gradient-to-r from-violet-600 to-blue-600 rounded-3xl blur-2xl opacity-20 -z-10" />
+          <div className="absolute -inset-4 bg-linear-to-r from-violet-600 to-blue-600 rounded-3xl blur-2xl opacity-20 -z-10" />
         </div>
 
       </div>

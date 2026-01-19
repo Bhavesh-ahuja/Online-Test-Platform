@@ -1,0 +1,8 @@
+{
+    "name": "online-test-platform-root",
+    "private": true,
+    "scripts": {
+        "setup": "npm install && cd backend && npm install && cd ../frontend && npm install",
+        "db:setup": "npm run db:setup --prefix backend"
+    }
+}
