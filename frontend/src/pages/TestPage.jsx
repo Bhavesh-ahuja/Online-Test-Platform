@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../components/Modal';
 import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
@@ -7,6 +7,17 @@ import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based o
    Global Constants & Helpers
 ---------------------------------------------------------*/
 const MAX_WARNINGS = 3;
+const RUNNING_STATUSES = ['IN_PROGRESS'];
+
+
+
+
+
+
+const getAutosaveKey = (testId, submissionId) =>
+  `autosave:test:${testId}:${submissionId}`;
+
+
 
 // Question Status Constants
 const STATUS = {
@@ -59,30 +70,37 @@ function WarningBanner({ count }) {
   );
 }
 
-function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, markedQuestions, visitedQuestions, onJump }) {
+function QuestionPalette({
+  questions,
+  totalQuestions,
+  currentQuestionIndex,
+  answers,
+  markedQuestions,
+  visitedQuestions,
+  onJump
+}) {
   // Helper to determine color class
   const getButtonClass = (index) => {
-    const questionId = index; // using index as ID for simplicity in palette mapping
-    const isCurrent = index === currentQuestionIndex;
+  const questionId = questions[index].id;
+  const isCurrent = index === currentQuestionIndex;
+  const isAnswered = answers[questionId] !== undefined;
+  const isMarked = markedQuestions.includes(index);
+  const isVisited = visitedQuestions.includes(index);
 
-    // Status Logic
-    const isAnswered = answers[index] !== undefined; // Check if we have an answer for this index
-    const isMarked = markedQuestions.includes(index);
-    const isVisited = visitedQuestions.includes(index);
+  let baseClass =
+    "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
 
-    let baseClass = "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
+  if (isCurrent) return baseClass + "ring-2 ring-offset-2 ring-blue-500 bg-blue-100";
+  if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white";
+  if (isMarked) return baseClass + "bg-purple-200";
+  if (isAnswered) return baseClass + "bg-green-500 text-white";
+  if (isVisited) return baseClass + "bg-red-100";
 
-    if (isCurrent) {
-      return baseClass + "ring-2 ring-offset-2 ring-blue-500 border-blue-600 bg-blue-100 text-blue-800";
-    }
+  return baseClass + "bg-gray-100";
+};
 
-    if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white border-purple-700"; // Marked & Answered
-    if (isMarked) return baseClass + "bg-purple-200 text-purple-800 border-purple-300"; // Marked for Review
-    if (isAnswered) return baseClass + "bg-green-500 text-white border-green-600"; // Answered
-    if (isVisited) return baseClass + "bg-red-100 text-red-800 border-red-300"; // Visited (Not Answered)
 
-    return baseClass + "bg-gray-100 text-gray-600 border-gray-300"; // Not Visited
-  };
+  
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 h-full border border-gray-200">
@@ -117,16 +135,34 @@ function QuestionPalette({ totalQuestions, currentQuestionIndex, answers, marked
 function TestPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const testId = id;
+    const LOCAL_AUTOSAVE_KEY = `local:test:${testId}`;
 
   // --- State ---
   const [test, setTest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [submissionId, setSubmissionId] = useState(null);
+  const [endTime, setEndTime] = useState(null);
+  const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+   const hasRestoredRef = useRef(false);
+   const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+  const timerIntervalRef = useRef(null);
+
+
+
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [warnings, setWarnings] = useState(0);
-  const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+
+  const autosaveIntervalRef = useRef(null);
+  const localAutosaveIntervalRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
+   const [lastSavedAt, setLastSavedAt] = useState(null);
+
+
 
   // Data Storage
   // We use objects keyed by Question INDEX (0, 1, 2) for local UI state
@@ -134,64 +170,322 @@ function TestPage() {
   const [answers, setAnswers] = useState({}); // { index: "Option A" }
   const [markedQuestions, setMarkedQuestions] = useState([]); // [0, 5, 8] (Indices)
   const [visitedQuestions, setVisitedQuestions] = useState([0]); // [0, 1, 2] (Indices)
+    
+  // --- 4. Submission Logic ---
+  const handleSubmit = useCallback(
+  async (status = 'COMPLETED') => {
+    if (timerIntervalRef.current) {
+  clearInterval(timerIntervalRef.current);
+  timerIntervalRef.current = null;
+   }
 
-  // --- 1. Fetch & Init ---
-  useEffect(() => {
-    const initTest = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return navigate('/login');
+    const examToken = sessionStorage.getItem('examSessionToken');
+    const loginToken = localStorage.getItem('token');
+    if (isSubmitted) return;   // 🔒 prevent re-run
+    setIsSubmitted(true);  
+     if (!examToken) {
+    alert("Session expired. Please refresh.");
+    return;
+  }
+    // 🔥 HARD STOP autosave immediately
+if (autosaveIntervalRef.current) {
+  clearInterval(autosaveIntervalRef.current);
+  autosaveIntervalRef.current = null;
+}
+if (localAutosaveIntervalRef.current) {
+  clearInterval(localAutosaveIntervalRef.current);
+  localAutosaveIntervalRef.current = null;
+};
 
-      try {
-        // Step A: Fetch Test Content
-        const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!testRes.ok) throw new Error('Failed to fetch test data');
-        const data = await testRes.json();
 
-        if (data.questions && Array.isArray(data.questions)) {
-          data.questions = shuffleArray(data.questions);
+
+    
+
+   
+
+    const formattedAnswers = {};
+    if (test && test.questions) {
+      test.questions.forEach((q) => {
+        if (answers[q.id]) {
+          formattedAnswers[q.id] = answers[q.id];
         }
-        setTest(data);
+      });
+    }
 
-        // Step B: Start/Resume Test Session (Get Start Time & Verify Schedule)
-        const startRes = await fetch(`http://localhost:8000/api/tests/${id}/start`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
+      
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+           Authorization: `Bearer ${examToken}`,
+           },
 
-        if (!startRes.ok) {
-          const errData = await startRes.json();
+        body: JSON.stringify({
+          answers: formattedAnswers,
+          status,
+        }),
+      });
+      // 🔴 HARD STOP: test already completed
+        if (response.status === 403) {
+          const data = await response.json();
 
-          // Handle Schedule/Security Errors
-          if (startRes.status === 403) {
-            alert(errData.error || "Access denied.");
-            navigate('/dashboard');
-            return;
-          }
-          throw new Error(errData.error || 'Failed to start test session');
-        }
+         if (data.finalSubmissionId) {
+            navigate(`/results/${data.finalSubmissionId}`);
+               return; // 🚨 STOP rendering test page
+             }
+           }
 
-        const sessionData = await startRes.json();
 
-        // Step C: Calculate Remaining Time based on SERVER start time
-        const startTime = new Date(sessionData.startTime).getTime();
-        const durationInMs = data.duration * 60 * 1000;
-        const endTime = startTime + durationInMs;
-        const now = new Date().getTime();
+      let data;
+const contentType = response.headers.get('content-type');
 
-        const secondsRemaining = (endTime - now) / 1000;
-        setTimeLeft(secondsRemaining);
+if (contentType && contentType.includes('application/json')) {
+  data = await response.json();
+} else {
+  const text = await response.text();
+  throw new Error(text || 'Submit failed');
+}
 
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit');
       }
-    };
 
-    initTest();
-  }, [id, navigate]);
+      // ✅ clear autosave ONLY after successful submit
+      if (submissionId) {
+        const autosaveKey = getAutosaveKey(id, submissionId);
+        localStorage.removeItem(autosaveKey);
+      }
+      setSubmissionStatus(status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED');
+
+      // ✅ single navigation (no duplicate)
+      navigate(`/results/${data.submissionId}`);
+      sessionStorage.removeItem('examSessionToken');
+    } catch (err) {
+      alert('Error submitting test: ' + err.message);
+    }
+  },
+  [id, answers, navigate, loading, test, submissionId]
+  
+);
+
+
+useEffect(() => {
+  if (!submissionId) return;
+  if (submissionStatus !== 'IN_PROGRESS') return;
+
+  const interval = setInterval(() => {
+    const autosaveKey = getAutosaveKey(id, submissionId);
+    localStorage.setItem(
+      autosaveKey,
+      JSON.stringify({
+        answers,
+        markedQuestions,
+        updatedAt: Date.now(),
+      })
+    );
+  }, 10000);
+
+  return () => clearInterval(interval);
+}, [answers, markedQuestions, submissionId, id]);
+
+
+
+
+
+
+
+
+
+ // Inside TestPage.jsx
+useEffect(() => {
+  if (submissionStatus !== 'IN_PROGRESS' || !submissionId) return;
+
+  const examToken = sessionStorage.getItem('examSessionToken');
+  if (!examToken) return;
+
+  autosaveIntervalRef.current = setInterval(() => {
+    // Change URL to /autosave and method to PATCH to match test.routes.js
+    fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
+      method: 'PATCH', 
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${examToken}`,
+      },
+      body: JSON.stringify({
+        submissionId, // Ensure this matches the controller expectation
+        answers,
+        markedQuestions,
+      }),
+    }).catch((err) => console.error("Autosave failed:", err));
+  }, 30000);
+
+  return () => {
+    if (autosaveIntervalRef.current) clearInterval(autosaveIntervalRef.current);
+  };
+}, [submissionId, submissionStatus, id, answers, markedQuestions]); // Added dependencies to ensure current state is sent
+
+
+ useEffect(() => {
+  if (!submissionId || !test || hasRestoredRef.current) return;
+
+  const autosaveKey = getAutosaveKey(id, submissionId);
+  const saved = localStorage.getItem(autosaveKey);
+
+  if (!saved) {
+    hasRestoredRef.current = true;
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    if (parsed.answers && typeof parsed.answers === 'object') {
+      setAnswers(parsed.answers);
+    }
+
+    if (Array.isArray(parsed.markedQuestions)) {
+      setMarkedQuestions(parsed.markedQuestions);
+    }
+
+    console.log('✅ Autosave restored correctly');
+  } catch (e) {
+    console.error('❌ Autosave restore failed', e);
+  }
+
+  hasRestoredRef.current = true;
+}, [submissionId, test, id]);
+
+
+
+
+// --- 1. Fetch & Init ---
+// --- Step A, B, C: Init Test ---
+useEffect(() => {
+  let isMounted = true;
+
+  const initTest = async () => {
+    // 🔥 HARD RESET for fresh attempt
+setIsSubmitted(false);
+setSubmissionStatus(null);
+setEndTime(null);
+setTimeLeft(null);
+hasRestoredRef.current = false;
+
+if (timerIntervalRef.current) {
+  clearInterval(timerIntervalRef.current);
+  timerIntervalRef.current = null;
+}
+
+    const loginToken = localStorage.getItem('token');
+    if (!loginToken) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const startRes = await fetch(
+        `http://localhost:8000/api/tests/${id}/start`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${loginToken}` },
+        }
+      );
+
+      if (!startRes.ok) {
+        const err = await startRes.json();
+        throw new Error(err.error || 'Start failed');
+      }
+
+      const sessionData = await startRes.json();
+
+      if (!isMounted) return;
+
+      setSubmissionStatus(sessionData.status || 'IN_PROGRESS');
+      setSubmissionId(sessionData.submissionId);
+      sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
+
+      const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
+        headers: {
+          Authorization: `Bearer ${sessionData.examSessionToken}`,
+        },
+      });
+
+      const data = await testRes.json();
+
+      // Inside initTest after setTest(data);
+if (sessionData.draft) {
+  const { answers: savedAnswers, markedQuestions: savedMarked } = sessionData.draft;
+  
+  if (savedAnswers) setAnswers(savedAnswers);
+  if (savedMarked) setMarkedQuestions(savedMarked);
+  
+  // Mark all questions that have answers as "visited"
+  const savedVisited = Object.keys(savedAnswers || {}).map(id => 
+    data.questions.findIndex(q => q.id === parseInt(id))
+  ).filter(index => index !== -1);
+  
+  setVisitedQuestions(prev => [...new Set([...prev, ...savedVisited])]);
+}
+
+      
+      if (!isMounted) return;
+
+      setTest(data);
+
+      const startTime = new Date(sessionData.startTime).getTime();
+const end = startTime + data.duration * 60 * 1000;
+
+setEndTime(end);
+setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  initTest();
+  return () => {
+    isMounted = false;
+  };
+}, [id, navigate]);
+
+
+      // --- Step D: Timer & Auto Submit ---
+useEffect(() => {
+  if (submissionStatus !== 'IN_PROGRESS' || isSubmitted) return;
+  if (!endTime) return;
+
+  timerIntervalRef.current = setInterval(() => {
+    const remaining = Math.max(
+      0,
+      Math.floor((endTime - Date.now()) / 1000)
+    );
+
+    setTimeLeft(remaining);
+
+    if (remaining === 0) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+      handleSubmit('TIMEOUT');
+    }
+  }, 1000);
+
+  return () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  };
+}, [endTime, submissionStatus, isSubmitted, handleSubmit]);
+
+
+
+  
+
 
   // --- 2. Navigation Handlers ---
   const handleJump = (index) => {
@@ -215,111 +509,70 @@ function TestPage() {
 
   // --- 3. Interaction Handlers ---
   const handleAnswerSelect = (option) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestionIndex]: option
-    }));
-  };
+  const questionId = test.questions[currentQuestionIndex].id;
+
+  setAnswers(prev => ({
+    ...prev,
+    [questionId]: option
+  }));
+};
+
+const handleAnswerChange = (questionId, value) => {
+  setAnswers(prev => ({
+    ...prev,
+    [questionId]: value
+  }));
+};
+
+
 
   const handleClearResponse = () => {
     const newAnswers = { ...answers };
-    delete newAnswers[currentQuestionIndex];
+    const questionId = test.questions[currentQuestionIndex].id;
+    delete newAnswers[questionId];
+
     setAnswers(newAnswers);
   };
 
   const toggleMarkForReview = () => {
-    if (markedQuestions.includes(currentQuestionIndex)) {
-      setMarkedQuestions(markedQuestions.filter(i => i !== currentQuestionIndex));
-    } else {
-      setMarkedQuestions([...markedQuestions, currentQuestionIndex]);
+  if (markedQuestions.includes(currentQuestionIndex)) {
+    setMarkedQuestions(markedQuestions.filter(i => i !== currentQuestionIndex));
+  } else {
+    setMarkedQuestions([...markedQuestions, currentQuestionIndex]);
+  }
+};
+
+
+ useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      handleViolation();
     }
   };
 
-  // --- 4. Submission Logic ---
-  const handleSubmit = useCallback(async (status = 'COMPLETED') => {
-    if (loading) return;
-    const token = localStorage.getItem('token');
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, []);
 
-    // Map our local "Index-based" answers back to "ID-based" for the backend
-    // Backend expects: { "questionID_123": "Option A" }
-    const formattedAnswers = {};
 
-    if (test && test.questions) {
-      test.questions.forEach((q, index) => {
-        if (answers[index]) {
-          formattedAnswers[q.id] = answers[index];
-        }
-      });
+const handleViolation = () => {
+  setWarnings(prev => {
+    const updated = prev + 1;
+
+    if (updated >= MAX_WARNINGS) {
+      alert('Violation Limit Reached. Test Terminated');
+      handleSubmit('TERMINATED');
     }
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          answers: formattedAnswers,
-          status: status
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to submit');
-
-      navigate(`/results/${data.submissionId}`);
-    } catch (err) {
-      alert('Error submitting test: ' + err.message);
-    }
-  }, [id, answers, navigate, loading, test]);
-
-  // --- 5. Effects (Timer, Auto-Submit, Tab Detection) ---
-
-  // Timer
-  useEffect(() => {
-    if (timeLeft === null) return;
-
-    if (timeLeft <= 0) {
-      if (!loading) {
-        alert("Time's up! Submitting your test...");
-        handleSubmit('TIMEOUT');
-      }
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [timeLeft, handleSubmit, loading]);
+    return updated; // ✅ THIS WAS MISSING
+  });
+};
 
 
-  // Helper to handle violations (increments count and checks limit)
-  const handleViolation = useCallback(() => {
-    setWarnings(prev => {
-      const updated = prev + 1;
-      if (updated >= MAX_WARNINGS) {
-        // Small timeout to allow state to update before alert blocks thread
-        setTimeout(() => {
-          alert('Violation Limit Reached. Test Terminated');
-          handleSubmit('TERMINATED');
-        }, 100);
-      }
-      return updated;
-    });
-  }, [handleSubmit])
-
-  // Tab Switching Detection
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) return;
-        handleViolation();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [handleSubmit]);
+  
+  
 
   // Full Screen Detection
   useEffect(() => {
@@ -377,17 +630,38 @@ function TestPage() {
     };
   }, []);
 
+  if (loading) {
+  return <div className="flex h-screen items-center justify-center">Loading Test...</div>;
+}
+
+if (error) {
+  return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
+}
+
+if (!test || !test.questions || test.questions.length === 0) {
+  return <div className="flex h-screen items-center justify-center">Test data not available</div>;
+}
+
+
 
   if (loading) return <div className="flex h-screen items-center justify-center text-lg">Loading Test...</div>;
   if (error) return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
 
-  const currentQuestion = test?.questions[currentQuestionIndex];
+  const currentQuestion =
+  test && test.questions && test.questions[currentQuestionIndex]
+    ? test.questions[currentQuestionIndex]
+    : null;
+   if (!currentQuestion) {
+  return <div className="flex h-screen items-center justify-center">Loading Question...</div>;
+}
+
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 select-none">
 
       {/* Header / Timer */}
-      <TimerDisplay seconds={timeLeft || 0} />
+     {endTime && <TimerDisplay seconds={timeLeft} />}
+
       <WarningBanner count={warnings} />
 
       {/* Main Layout */}
@@ -400,7 +674,8 @@ function TestPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Question {currentQuestionIndex + 1}</h2>
             <div className="text-sm text-gray-500">
-              {test.title}
+              {test?.title || ''}
+
             </div>
           </div>
 
@@ -410,29 +685,29 @@ function TestPage() {
               {currentQuestion.text}
             </p>
           </div>
+{/* Options */}
+<div className="space-y-3 mb-8">
+  {currentQuestion.options.map((option, index) => (
+    <label
+      key={index}
+      className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
+        ${answers[currentQuestion.id] === option
+          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+          : 'border-gray-200 bg-white'}`}
+    >
+      <input
+        type="radio"
+        name={`question_${currentQuestion.id}`}
+        value={option}
+        checked={answers[currentQuestion.id] === option}
+        onChange={() => handleAnswerSelect(option)}
+        className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300"
+      />
+      <span className="ml-3 text-gray-700 font-medium">{option}</span>
+    </label>
+  ))}
+</div>
 
-          {/* Options */}
-          <div className="space-y-3 mb-8">
-            {currentQuestion.options.map((option, index) => (
-              <label
-                key={index}
-                className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
-                  ${answers[currentQuestionIndex] === option
-                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                    : 'border-gray-200 bg-white'}`}
-              >
-                <input
-                  type="radio"
-                  name={`question_${currentQuestionIndex}`}
-                  value={option}
-                  checked={answers[currentQuestionIndex] === option}
-                  onChange={() => handleAnswerSelect(option)}
-                  className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-3 text-gray-700 font-medium">{option}</span>
-              </label>
-            ))}
-          </div>
 
           {/* Action Buttons */}
           <div className="mt-auto pt-6 border-t flex justify-between items-center">
@@ -492,14 +767,17 @@ function TestPage() {
 
         {/* Right: Question Palette (25%) */}
         <div className="w-1/4 p-4 bg-gray-100 border-l border-gray-200 overflow-y-auto">
-          <QuestionPalette
-            totalQuestions={test.questions.length}
-            currentQuestionIndex={currentQuestionIndex}
-            answers={answers}
-            markedQuestions={markedQuestions}
-            visitedQuestions={visitedQuestions}
-            onJump={handleJump}
-          />
+         <QuestionPalette
+  questions={test.questions}   // ✅ THIS LINE FIXES EVERYTHING
+  totalQuestions={test.questions.length}
+  currentQuestionIndex={currentQuestionIndex}
+  answers={answers}
+  markedQuestions={markedQuestions}
+  visitedQuestions={visitedQuestions}
+  onJump={handleJump}
+/>
+
+
         </div>
 
       </div>
