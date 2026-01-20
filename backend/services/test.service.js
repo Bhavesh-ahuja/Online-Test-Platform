@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createExamSessionToken } from '../lib/examSessionToken.js';
+import AppError from '../utils/AppError.js';
 
 class TestService {
     async createTest(data, userId) {
@@ -37,7 +38,7 @@ class TestService {
             include: { _count: { select: { submissions: true } } }
         });
 
-        if (!existingTest) throw new Error('Test not found');
+        if (!existingTest) throw new AppError('Test not found', 404);
 
         // 2. Check for Submissions (Safety Lock)
         const hasSubmissions = existingTest._count.submissions > 0;
@@ -79,14 +80,14 @@ class TestService {
 
     async startTest(testId, studentId) {
         const test = await prisma.test.findUnique({ where: { id: parseInt(testId) } });
-        if (!test) throw new Error('Test not found');
+        if (!test) throw new AppError('Test not found', 404);
 
         const now = new Date();
         if (test.scheduledStart && now < new Date(test.scheduledStart)) {
-            throw new Error(`Test has not started yet. Starts at: ${new Date(test.scheduledStart).toLocaleString()}`);
+            throw new AppError(`Test has not started yet. Starts at: ${new Date(test.scheduledStart).toLocaleString()}`, 403);
         }
         if (test.scheduledEnd && now > new Date(test.scheduledEnd)) {
-            throw new Error('Test window has closed.');
+            throw new AppError('Test window has closed.', 403);
         }
 
         const submissions = await prisma.testSubmission.findMany({
@@ -114,7 +115,7 @@ class TestService {
         }
 
         if (test.attemptType === 'LIMITED' && test.maxAttempts !== null && completedCount >= test.maxAttempts) {
-            throw new Error('Maximum attempts reached');
+            throw new AppError('Maximum attempts reached', 403);
         }
 
         const submission = await prisma.testSubmission.create({
@@ -171,21 +172,21 @@ class TestService {
             include: includeOptions
         });
 
-        if (!test) throw new Error('Test not found');
+        if (!test) throw new AppError('Test not found', 404);
         return test;
     }
 
     async submitTest(params, body, examSession) {
-        if (!examSession) throw new Error('Invalid or expired exam session');
+        if (!examSession) throw new AppError('Invalid or expired exam session', 401);
 
         const { id } = params;
         const { answers, status } = body;
         const { submissionId } = examSession;
 
         const submission = await prisma.testSubmission.findUnique({ where: { id: submissionId } });
-        if (!submission) throw new Error('Submission not found');
-        if (submission.status !== 'IN_PROGRESS') throw new Error('Submission already finalized');
-        if (examSession.status !== 'IN_PROGRESS') throw new Error('Submission already closed');
+        if (!submission) throw new AppError('Submission not found', 404);
+        if (submission.status !== 'IN_PROGRESS') throw new AppError('Submission already finalized', 400);
+        if (examSession.status !== 'IN_PROGRESS') throw new AppError('Submission already closed', 400);
 
         const correctQuestions = await prisma.question.findMany({
             where: { testId: parseInt(id) },
@@ -238,7 +239,7 @@ class TestService {
         });
 
         if (!submission || (submission.studentId !== userId && role !== 'ADMIN')) {
-            throw new Error('Submission not found or unauthorized');
+            throw new AppError('Submission not found or unauthorized', 404);
         }
         return submission;
     }
@@ -269,9 +270,9 @@ class TestService {
             include: { _count: { select: { submissions: true } } }
         });
 
-        if (!test) throw new Error("Test not found");
+        if (!test) throw new AppError("Test not found", 404);
         if (test._count.submissions > 0) {
-            throw new Error('Cannot delete test because it has student submissions. Archiving is recommended instead.');
+            throw new AppError('Cannot delete test because it has student submissions. Archiving is recommended instead.', 400);
         }
 
         await prisma.$transaction([
@@ -284,7 +285,7 @@ class TestService {
     }
 
     async uploadTestPDF(file) {
-        if (!file) throw new Error("No PDF file uploaded");
+        if (!file) throw new AppError("No PDF file uploaded", 400);
 
         const data = new Uint8Array(file.buffer);
         const loadingTask = getDocument(data);
@@ -298,7 +299,7 @@ class TestService {
         }
 
         if (!extractedText || extractedText.length < 50) {
-            throw new Error("Could not extract enough text. Ensure this is a text-based PDF.");
+            throw new AppError("Could not extract enough text. Ensure this is a text-based PDF.", 400);
         }
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -341,7 +342,7 @@ class TestService {
             const questions = JSON.parse(cleanJson);
             return { questions };
         } catch (parseError) {
-            throw new Error("AI failed to format the questions correctly. Please try a cleaner PDF.");
+            throw new AppError("AI failed to format the questions correctly. Please try a cleaner PDF.", 500);
         }
     }
 
