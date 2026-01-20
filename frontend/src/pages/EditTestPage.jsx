@@ -37,10 +37,14 @@ function EditTestPage() {
     const fetchTest = async () => {
       const token = localStorage.getItem('token');
       try {
-        const response = await authFetch(`/api/tests/${id}/admin`);
-        if (!response.ok) throw new Error('Failed to fetch test');
-        const data = await response.json();
+        const res = await fetch(
+          `${API_BASE_URL}/api/tests/${id}/admin`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
+        if (!res.ok) throw new Error('Failed to fetch test');
+
+        const data = await res.json();
         // Format dates for input[type="datetime-local"] (YYYY-MM-DDTHH:mm)
         const formatDate = (dateString) => {
           if (!dateString) return '';
@@ -155,7 +159,7 @@ function EditTestPage() {
     if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
 
     try {
-      const response = await authFetch(`/api/tests/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
