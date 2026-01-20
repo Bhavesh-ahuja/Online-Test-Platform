@@ -1,9 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-
-
-// Import the components we created
-import Navbar from './components/Navbar';
+import { AuthProvider } from './context/AuthContext';
+import MainLayout from './layouts/MainLayout';
+import ExamLayout from './layouts/ExamLayout';
 
 // Import Pages
 import HomePage from './pages/HomePage';
@@ -23,47 +22,37 @@ function AppRoutes() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-      <main className="grow">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+    <Routes>
+      {/* Public & Admin Routes (Wrapped in MainLayout) */}
+      <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
+      <Route path="/login" element={<MainLayout><LoginPage /></MainLayout>} />
+      <Route path="/register" element={<MainLayout><RegisterPage /></MainLayout>} />
+      <Route path="/dashboard" element={<MainLayout><DashboardPage /></MainLayout>} />
+      <Route path="/create-test" element={<MainLayout><CreateTestPage /></MainLayout>} />
+      <Route path="/test/edit/:id" element={<MainLayout><EditTestPage /></MainLayout>} />
+      <Route path="/tests/:id/admin-results" element={<MainLayout><AdminResultsPage /></MainLayout>} />
+      <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
+      <Route path="/test/:id/instructions" element={<MainLayout><TestInstructions /></MainLayout>} />
+      <Route path="/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
+      <Route path="/my-results" element={<MainLayout><MyResultsPage /></MainLayout>} />
 
-          {/* Admin-Only Routes */}
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/create-test" element={<CreateTestPage />} />
-          <Route path="/test/edit/:id" element={<EditTestPage />} />
-          <Route path="/tests/:id/admin-results" element={<AdminResultsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-
-          {/* Test Routes */}
-          <Route path="/test/:id/instructions" element={<TestInstructions />} />
-
-          {/* 🔥 ONLY LINE THAT MATTERS */}
-          <Route
-            path="/test/:id"
-            element={<TestPage key={location.pathname} />}
-          />
-
-          <Route path="/results/:submissionId" element={<ResultsPage />} />
-          <Route path="/my-results" element={<MyResultsPage />} />
-        </Routes>
-      </main>
-    </div>
+      {/* Exam Route (Wrapped in ExamLayout) */}
+      <Route
+        path="/test/:id"
+        element={<ExamLayout><TestPage key={location.pathname} /></ExamLayout>}
+      />
+    </Routes>
   );
 }
-
 
 function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   );
 }
-
 
 export default App;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_BASE_URL } from "../../config";
+import { authFetch } from "../utils/authFetch";
 
 function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -20,22 +20,18 @@ function ProfilePage() {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await authFetch("/api/users/me");
 
         if (response.status === 401 || response.status === 403) {
-         localStorage.removeItem("token");
-         localStorage.removeItem("user");
-         navigate("/login");
-        return;
-}
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return;
+        }
 
-         if (!response.ok) {
-           throw new Error("Failed to fetch profile");
-          }
+        if (!response.ok) {
+          throw new Error("Failed to fetch profile");
+        }
 
 
         const data = await response.json();

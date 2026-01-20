@@ -1,8 +1,8 @@
 // CreateTestPage.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
 import { localToUtc } from '../utils/datetime';
+import { authFetch } from '../utils/authFetch';
 
 
 function CreateTestPage() {
@@ -100,13 +100,11 @@ function CreateTestPage() {
     const token = localStorage.getItem('token');
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('file', file);
     try {
-      const res = await fetch('http://localhost:8000/api/tests/upload-pdf', {
+      const res = await authFetch('/api/tests/upload-pdf', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-          // Do not set Content-Type for FormData
-        },
+        // Do not set Content-Type for FormData, browser sets it with boundary
         body: formData
       });
 
@@ -150,6 +148,21 @@ function CreateTestPage() {
       }
     }
 
+    // Date Validation
+    if (testData.scheduledStart && testData.scheduledEnd) {
+      if (new Date(testData.scheduledStart) >= new Date(testData.scheduledEnd)) {
+        alert('End Time must be after Start Time');
+        return;
+      }
+    }
+    if (testData.scheduledStart) {
+      // Allow a small buffer for "now"
+      if (new Date(testData.scheduledStart) < new Date(new Date().getTime() - 60000)) {
+        alert('Start Time cannot be in the past');
+        return;
+      }
+    }
+
     const token = localStorage.getItem('token');
 
     // Validation: Check for empty options
@@ -160,11 +173,10 @@ function CreateTestPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tests`, {
+      const res = await authFetch('/api/tests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...testData,
