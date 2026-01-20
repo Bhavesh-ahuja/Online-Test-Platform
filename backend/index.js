@@ -33,6 +33,10 @@ app.use('/api/tests', testRoutes);
 // All routes in 'userRoutes' will be prefixed with /api/users
 app.use('/api/users', userRoutes);
 
+// --- Error Handling Middleware ---
+import errorHandler from './middleware/error.middleware.js';
+app.use(errorHandler);
+
 // --- Start the Server ---
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);

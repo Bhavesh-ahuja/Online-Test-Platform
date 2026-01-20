@@ -1,4 +1,5 @@
-import prisma from '../lib/prisma.js'
+import prisma from '../lib/prisma.js';
+import AppError from '../utils/AppError.js';
 
 class UserService {
     async getProfile(userId) {
@@ -13,7 +14,7 @@ class UserService {
         });
 
         if (!user) {
-            throw new Error('User not found');
+            throw new AppError('User not found', 404);
         }
 
         return user;

@@ -20,7 +20,8 @@
     "express": "5.1.0",
     "jsonwebtoken": "9.0.2",
     "multer": "2.0.2",
-    "pdfjs-dist": "5.4.530"
+    "pdfjs-dist": "5.4.530",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@prisma/client": "6.19.0",

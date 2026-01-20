@@ -14,6 +14,8 @@ import {
   autosaveTestProgress,
 } from '../controllers/test.controller.js';
 import multer from "multer";
+import { validateRequest } from '../middleware/validate.middleware.js';
+import { createTestSchema, updateTestSchema } from '../validators/test.validator.js';
 import { authenticateToken, isAdmin } from '../middleware/auth.middleware.js';
 import { getTestByIdForAdmin } from '../controllers/test.controller.js';
 import { authenticateExamSession } from '../middleware/examSessionAuth.js';
@@ -34,7 +36,7 @@ const upload = multer({ storage: storage });
 router.get('/', authenticateToken, getAllTests);
 
 // POST /api/tests - Only ADMINS can create a new test
-router.post('/', authenticateToken, isAdmin, createTest);
+router.post('/', authenticateToken, isAdmin, validateRequest(createTestSchema), createTest);
 
 // POST /api/tests/upload-pdf - Admin only: Upload test PDF
 router.post(
@@ -65,10 +67,8 @@ router.get(
 // GET /api/tests/:id - Get test details by ID
 router.get('/:id', authenticateExamSession, getTestById);
 
-
-
 // PUT /api/tests/:id - Admin only: Update test
-router.put('/:id', authenticateToken, isAdmin, updateTest);
+router.put('/:id', authenticateToken, isAdmin, validateRequest(updateTestSchema), updateTest);
 
 // DELETE /api/tests/:id - Admin only: Delete test
 router.delete('/:id', authenticateToken, isAdmin, deleteTest);
@@ -78,7 +78,6 @@ router.post('/:id/start', authenticateToken, startTest);
 
 router.patch('/:id/autosave', authenticateExamSession, autosaveTestProgress);
 router.post('/:id/submit', authenticateExamSession, submitTest);
-
 
 /**
  * ============================
