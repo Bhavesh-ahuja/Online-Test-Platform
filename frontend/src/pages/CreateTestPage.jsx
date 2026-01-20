@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config'; // Adjust path (../ or ./) based on file location
 import { localToUtc } from '../utils/datetime';
- 
+
 
 function CreateTestPage() {
   const navigate = useNavigate();
@@ -24,8 +24,8 @@ function CreateTestPage() {
 
   // UI & Feature States
   const [isUploading, setIsUploading] = useState(false);
-  
- 
+
+
   const [attemptType, setAttemptType] = useState('ONCE');
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -145,7 +145,7 @@ function CreateTestPage() {
         return;
       }
       if (!q.correctAnswer) {
-        alert(`Question "${q.text.substring(0,20)}..." is missing a correct answer selection`);
+        alert(`Question "${q.text.substring(0, 20)}..." is missing a correct answer selection`);
         return;
       }
     }
@@ -168,6 +168,11 @@ function CreateTestPage() {
         },
         body: JSON.stringify({
           ...testData,
+          duration: parseInt(testData.duration, 10),
+          scheduledStart: testData.scheduledStart ? new Date(testData.scheduledStart).toISOString() : null,
+          scheduledEnd: testData.scheduledEnd ? new Date(testData.scheduledEnd).toISOString() : null,
+          maxAttempts: maxAttempts ? parseInt(maxAttempts, 10) : null,
+          attemptType,
           questions: questions
         })
       });
@@ -180,7 +185,7 @@ function CreateTestPage() {
       alert(error.message);
     }
   };
-  
+
 
   return (
     <div className="container mx-auto p-6 max-w-3xl">
@@ -230,7 +235,7 @@ function CreateTestPage() {
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
 
-        
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
@@ -319,7 +324,7 @@ function CreateTestPage() {
             </div>
           </div>
         </div>
-         
+
 
         {/* QUESTIONS SECTION */}
         <div className="space-y-6">
@@ -376,9 +381,9 @@ function CreateTestPage() {
                   + Add Option
                 </button>
               </div>
-              
 
-              
+
+
               <div className="pt-4 border-t">
                 <label className="block text-xs font-bold text-green-600 uppercase mb-2">Set Correct Answer</label>
                 <select
@@ -408,31 +413,31 @@ function CreateTestPage() {
         </div>
 
         {/* FINAL ACTION BUTTONS */}
-<div className="flex gap-4 pt-6">
-  <button
-    type="button"
-    onClick={() => {
-      if (!hasUnsavedChanges || window.confirm('You have unsaved changes. Discard them?')) {
-        navigate('/dashboard');
-      }
-    }}
-    className="w-1/3 bg-gray-100 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition"
-  >
-    Cancel
-  </button>
+        <div className="flex gap-4 pt-6">
+          <button
+            type="button"
+            onClick={() => {
+              if (!hasUnsavedChanges || window.confirm('You have unsaved changes. Discard them?')) {
+                navigate('/dashboard');
+              }
+            }}
+            className="w-1/3 bg-gray-100 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition"
+          >
+            Cancel
+          </button>
 
-  <button
-    type="submit"
-    className="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition transform active:scale-95"
-  >
-    Create Test
-  </button>
-</div>
+          <button
+            type="submit"
+            className="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition transform active:scale-95"
+          >
+            Create Test
+          </button>
+        </div>
 
-        
+
       </form>
     </div>
-    
+
   );
 }
 

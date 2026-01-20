@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const createTestSchema = z.object({
     title: z.string().min(3, 'Title must be at least 3 characters'),
     description: z.string().optional(),
-    duration: z.number().int().positive('Duration must be a positive integer'),
+    duration: z.coerce.number().int().positive('Duration must be a positive integer'),
     scheduledStart: z.string().datetime().nullable().optional(),
     scheduledEnd: z.string().datetime().nullable().optional(),
     questions: z.array(z.object({
@@ -16,5 +16,5 @@ export const createTestSchema = z.object({
 
 export const updateTestSchema = createTestSchema.partial().extend({
     attemptType: z.enum(['ONCE', 'LIMITED', 'UNLIMITED']).optional(),
-    maxAttempts: z.number().int().positive().nullable().optional(),
+    maxAttempts: z.coerce.number().int().positive().nullable().optional(),
 });
