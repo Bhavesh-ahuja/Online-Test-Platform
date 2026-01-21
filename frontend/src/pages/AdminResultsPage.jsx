@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import autoTable from 'jspdf-autotable';
 import { authFetch } from '../utils/authFetch';
+import { jsPDF } from 'jspdf';
 
 function AdminResultsPage() {
   const { id } = useParams(); // Test ID

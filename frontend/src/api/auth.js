@@ -29,7 +29,7 @@ export const authApi = {
     },
 
     getProfile: async () => {
-        const res = await authFetch('/api/users/profile');
+        const res = await authFetch('/api/users/me');
         if (!res.ok) throw new Error('Failed to fetch profile');
         return res.json();
     }
