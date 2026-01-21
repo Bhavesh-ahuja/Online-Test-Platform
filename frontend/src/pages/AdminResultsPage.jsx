@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
-import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { authFetch } from '../utils/authFetch';
+import { jsPDF } from 'jspdf';
 
 function AdminResultsPage() {
   const { id } = useParams(); // Test ID
   const navigate = useNavigate();
-  
+
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sortOrder, setSortOrder] = useState('desc'); // 'desc' or 'asc'
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     const fetchSubmissions = async () => {
@@ -19,12 +23,13 @@ function AdminResultsPage() {
       if (!token) return navigate('/login');
 
       try {
-        const response = await authFetch(`/api/tests/${id}/submissions`);
+        const response = await authFetch(`/api/tests/${id}/submissions?page=${page}&limit=10`);
 
 
         if (!response.ok) throw new Error('Failed to fetch submissions');
         const data = await response.json();
-        setSubmissions(data);
+        setSubmissions(data.submissions);
+        setTotalPages(data.totalPages);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -32,7 +37,7 @@ function AdminResultsPage() {
       }
     };
     fetchSubmissions();
-  }, [id, navigate]);
+  }, [id, navigate, page]);
 
   // Sorting Logic
   const sortedSubmissions = [...submissions].sort((a, b) => {
@@ -105,21 +110,21 @@ function AdminResultsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Test Results</h1>
         <div className="space-x-4">
-            <Link to="/dashboard" className="text-blue-600 hover:underline">Back to Dashboard</Link>
+          <Link to="/dashboard" className="text-blue-600 hover:underline">Back to Dashboard</Link>
         </div>
       </div>
 
       {/* Toolbar */}
       <div className="mb-4 flex justify-between items-center bg-gray-50 p-4 rounded-lg shadow-sm">
-        
-        <button 
-            onClick={handleDownloadReport}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition flex items-center shadow"
+
+        <button
+          onClick={handleDownloadReport}
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition flex items-center shadow"
         >
-            <span className="mr-2">📄</span> Download Class Report
+          <span className="mr-2">📄</span> Download Class Report
         </button>
 
-        <select 
+        <select
           className="p-2 border rounded shadow-sm bg-white"
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value)}

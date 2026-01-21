@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { utcToLocal, localToUtc } from "../utils/datetime.js";
-import { API_BASE_URL } from '../../config';
+import { authFetch } from '../utils/authFetch';
 
 function EditTestPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   // --- State Management ---
   const [loading, setLoading] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  
+
   // Test Data State
   const [testData, setTestData] = useState({
     title: '',
@@ -21,11 +21,12 @@ function EditTestPage() {
   });
 
   const [questions, setQuestions] = useState([]);
+  const [submissionCount, setSubmissionCount] = useState(0);
 
   // Attempt Configuration State
   const [attemptType, setAttemptType] = useState('ONCE');
   const [maxAttempts, setMaxAttempts] = useState(1);
-   
+
 
   // UI State for Time Pickers
   const [showStartOk, setShowStartOk] = useState(false);
@@ -36,18 +37,14 @@ function EditTestPage() {
     const fetchTest = async () => {
       const token = localStorage.getItem('token');
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/tests/${id}/admin`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const response = await authFetch(`/api/tests/${id}/admin`);
+        if (!response.ok) throw new Error('Failed to fetch test');
+        const data = await response.json();
 
-        if (!res.ok) throw new Error('Failed to fetch test');
-
-        const data = await res.json();
         // Format dates for input[type="datetime-local"] (YYYY-MM-DDTHH:mm)
         const formatDate = (dateString) => {
-            if (!dateString) return '';
-            return new Date(dateString).toISOString().slice(0, 16);
+          if (!dateString) return '';
+          return new Date(dateString).toISOString().slice(0, 16);
         };
 
         // Map data and convert UTC from DB to Local for the input fields
@@ -63,6 +60,7 @@ function EditTestPage() {
         setAttemptType(data.attemptType || 'ONCE');
         setMaxAttempts(data.maxAttempts || 1);
         setQuestions(data.questions);
+        setSubmissionCount(data._count?.submissions || 0);
       } catch (err) {
         alert(err.message);
         navigate('/dashboard');
@@ -132,9 +130,9 @@ function EditTestPage() {
     setQuestions(questions.filter((_, index) => index !== qi));
     markDirty();
   };
-  
 
- 
+
+
   // --- Form Submission ---
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -157,11 +155,10 @@ function EditTestPage() {
     if (invalidMCQ) return alert("All MCQ questions must have at least 2 options.");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
+      const response = await authFetch(`/api/tests/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...testData,
@@ -173,7 +170,7 @@ function EditTestPage() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to update test.');
+      if (!response.ok) throw new Error('Failed to update test.');
 
       alert('Test Updated Successfully!');
       navigate('/dashboard');
@@ -187,131 +184,142 @@ function EditTestPage() {
   return (
     <div className="container mx-auto p-6 max-w-3xl">
       <h1 className="text-3xl font-bold mb-6">Edit Test</h1>
-      
+
       <form onSubmit={handleSubmit} className="space-y-6">
 
         {/* --- TEST DETAILS SECTION --- */}
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          {submissionCount > 0 && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <p className="text-sm text-yellow-700">
+                <strong>⚠️ Editing Limited:</strong> This test has {submissionCount} submission(s). Questions cannot be modified to preserve result integrity.
+              </p>
+            </div>
+          )}
           <h2 className="text-xl font-semibold">Test Details</h2>
           <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
           <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
-          
+
           <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
                 Duration (minutes)
-             </label>
+              </label>
               <input
-               type="number"
+                type="number"
                 className="w-full p-2 border rounded"
-                 name="duration"
-                 required
-               value={testData.duration}
-                   onChange={handleTestChange}
-                   />
-           </div>
+                name="duration"
+                required
+                value={testData.duration}
+                onChange={handleTestChange}
+              />
+            </div>
           </div>
 
 
-  {/* ATTEMPT SETTINGS */}
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">
-      Allowed Attempts
-    </label>
+          {/* ATTEMPT SETTINGS */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Allowed Attempts
+            </label>
 
-    <div className="flex gap-4 items-center h-10">
-      {['ONCE', 'LIMITED', 'UNLIMITED'].map((type) => (
-        <label key={type} className="flex items-center gap-1 text-sm cursor-pointer">
-          <input
-            type="radio"
-            className="accent-blue-600"
-            checked={attemptType === type}
-            onChange={() => {
-              setAttemptType(type);
-              setHasUnsavedChanges(true);
-            }}
-          />
-          {type.charAt(0) + type.slice(1).toLowerCase()}
-        </label>
-      ))}
-    </div>
+            <div className="flex gap-4 items-center h-10">
+              {['ONCE', 'LIMITED', 'UNLIMITED'].map((type) => (
+                <label key={type} className="flex items-center gap-1 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    className="accent-blue-600"
+                    checked={attemptType === type}
+                    onChange={() => {
+                      setAttemptType(type);
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                  {type.charAt(0) + type.slice(1).toLowerCase()}
+                </label>
+              ))}
+            </div>
 
-    {attemptType === 'LIMITED' && (
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-sm text-gray-500">Max:</span>
-        <input
-          type="number"
-          min={1}
-          className="w-20 border rounded p-1 text-center"
-          value={maxAttempts}
-          onChange={(e) => {
-            setMaxAttempts(Number(e.target.value));
-            setHasUnsavedChanges(true);
-          }}
-        />
-      </div>
-    )}
-  </div>
-</div>  {/* ✅ THIS WAS MISSING */}
+            {attemptType === 'LIMITED' && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm text-gray-500">Max:</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-20 border rounded p-1 text-center"
+                  value={maxAttempts}
+                  onChange={(e) => {
+                    setMaxAttempts(Number(e.target.value));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>  {/* ✅ THIS WAS MISSING */}
 
 
-            
-            {/* SCHEDULING */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-  <div className="relative">
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Start Time (Local)
-    </label>
-    <input
-      type="datetime-local"
-      className="w-full p-2 border rounded pr-14"
-      name="scheduledStart"
-      value={testData.scheduledStart}
-      onChange={(e) => {
-        handleTestChange(e);
-        setShowStartOk(true);
-      }}
-    />
-    {showStartOk && (
-      <button
-        type="button"
-        className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
-        onClick={() => setShowStartOk(false)}
-      >
-        OK
-      </button>
-    )}
-  </div>
 
-  <div className="relative">
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      End Time (Local)
-    </label>
-    <input
-      type="datetime-local"
-      className="w-full p-2 border rounded pr-14"
-      name="scheduledEnd"
-      value={testData.scheduledEnd}
-      onChange={(e) => {
-        handleTestChange(e);
-        setShowEndOk(true);
-      }}
-    />
-    {showEndOk && (
-      <button
-        type="button"
-        className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
-        onClick={() => setShowEndOk(false)}
-      >
-        OK
-      </button>
-    )}
-  </div>
-</div>
+        {/* SCHEDULING */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Start Time (Local)
+            </label>
+            <input
+              type="datetime-local"
+              className="w-full p-2 border rounded pr-14"
+              name="scheduledStart"
+              value={testData.scheduledStart}
+              onChange={(e) => {
+                handleTestChange(e);
+                setShowStartOk(true);
+              }}
+            />
+            {showStartOk && (
+              <button
+                type="button"
+                className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
+                onClick={() => setShowStartOk(false)}
+              >
+                OK
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              End Time (Local)
+            </label>
+            <input
+              type="datetime-local"
+              className="w-full p-2 border rounded pr-14"
+              name="scheduledEnd"
+              value={testData.scheduledEnd}
+              onChange={(e) => {
+                handleTestChange(e);
+                setShowEndOk(true);
+              }}
+            />
+            {showEndOk && (
+              <button
+                type="button"
+                className="absolute right-1 top-7 px-2 py-1 bg-green-600 text-white text-xs rounded"
+                onClick={() => setShowEndOk(false)}
+              >
+                OK
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* --- QUESTIONS SECTION --- */}
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
           <h2 className="text-xl font-semibold border-b pb-2">Questions ({questions.length})</h2>
+
+          {submissionCount > 0 && (
+            <div className="absolute inset-0 bg-white/50 z-10 cursor-not-allowed" title="Questions are locked" />
+          )}
 
           {questions.map((q, qi) => (
             <div key={qi} className="bg-white p-6 rounded-lg shadow-md border border-gray-100 relative group">
@@ -385,14 +393,15 @@ function EditTestPage() {
                 </select>
               </div>
 
-              
+
             </div>
           ))}
 
           <button
             type="button"
             onClick={addQuestion}
-            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-blue-400 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+            disabled={submissionCount > 0}
+            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-blue-400 hover:text-blue-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="text-xl">+</span> Add New Question
           </button>

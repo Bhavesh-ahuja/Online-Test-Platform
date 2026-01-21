@@ -2,11 +2,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 
 // Import routes
 import authRoutes from './routes/auth.routes.js';
 import testRoutes from './routes/test.routes.js';
-import userRoutes from './routes/test.routes.js';
+import userRoutes from './routes/user.routes.js';
 
 // Initialize dotenv to load .env variables
 dotenv.config();
@@ -17,6 +20,22 @@ const port = process.env.PORT || 8000;
 
 
 // --- Middleware ---
+// Security Headers
+app.use(helmet());
+
+// Logger
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10000, // Increased to 10000 to handle 400+ students on shared NAT/WiFi
+  message: 'Too many requests from this IP, please try again later.'
+});
+app.use('/api', limiter);
+
 // Enable CORS for all routes
 app.use(cors());
 // Enable built-in JSON parsing for request bodies

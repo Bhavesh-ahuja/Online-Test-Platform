@@ -1,809 +1,299 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import Modal from '../components/Modal';
-import { API_BASE_URL } from '../../config';  // Adjust path (../ or ./) based on file location
+import { useTestEngine } from '../hooks/useTestEngine';
+import TimerDisplay from '../components/TimerDisplay';
+import QuestionPalette from '../components/QuestionPalette';
 
-/* --------------------------------------------------------
-   Global Constants & Helpers
----------------------------------------------------------*/
 const MAX_WARNINGS = 3;
-const RUNNING_STATUSES = ['IN_PROGRESS'];
 
-
-
-
-
-
-const getAutosaveKey = (testId, submissionId) =>
-  `autosave:test:${testId}:${submissionId}`;
-
-
-
-// Question Status Constants
-const STATUS = {
-  NOT_VISITED: 'not_visited',
-  NOT_ANSWERED: 'not_answered', // Visited but no answer
-  ANSWERED: 'answered',
-  MARKED: 'marked', // Marked for review
-  MARKED_ANSWERED: 'marked_answered' // Answered AND Marked
-};
-
-function shuffleArray(array) {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
-/* --------------------------------------------------------
-   Sub-Components
----------------------------------------------------------*/
-
-function TimerDisplay({ seconds }) {
-  const formatTime = () => {
-    const safeSeconds = Math.max(0, Math.floor(seconds));
-    const minutes = Math.floor(safeSeconds / 60);
-    const remainingSeconds = safeSeconds % 60;
-    const minStr = String(minutes).padStart(2, '0');
-    const secStr = String(remainingSeconds).padStart(2, '0');
-    return `${minStr}:${secStr}`;
-  };
-
+function WarningBanner({ count }) {
+  if (!count) return null;
   return (
-    <div className="bg-gray-800 text-white p-3 px-6 flex justify-between items-center shadow-md">
-      <span className="font-semibold text-gray-300 tracking-wide">Online Test Platform</span>
-      <span className={`font-bold text-xl font-mono ${seconds < 60 ? 'text-red-400 animate-pulse' : 'text-blue-300'}`}>
-        Time Left: {formatTime()}
+    <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mx-6 mt-4 rounded-r shadow-sm flex items-center justify-between animate-pulse">
+      <span className="font-medium flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        </svg>
+        Warning! Tab switching is prohibited.
+      </span>
+      <span className="bg-red-200 text-red-800 px-2 py-1 rounded text-xs font-bold">
+        {count}/{MAX_WARNINGS}
       </span>
     </div>
   );
 }
 
-function WarningBanner({ count }) {
-  if (!count) return null;
-  return (
-    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mx-4 mt-4 text-sm font-medium" role="alert">
-      Warning! Tab switching/Exiting Full Screen is prohibited. ({count}/{MAX_WARNINGS})
-    </div>
-  );
-}
-
-function QuestionPalette({
-  questions,
-  totalQuestions,
-  currentQuestionIndex,
-  answers,
-  markedQuestions,
-  visitedQuestions,
-  onJump
-}) {
-  // Helper to determine color class
-  const getButtonClass = (index) => {
-  const questionId = questions[index].id;
-  const isCurrent = index === currentQuestionIndex;
-  const isAnswered = answers[questionId] !== undefined;
-  const isMarked = markedQuestions.includes(index);
-  const isVisited = visitedQuestions.includes(index);
-
-  let baseClass =
-    "w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold border transition-all ";
-
-  if (isCurrent) return baseClass + "ring-2 ring-offset-2 ring-blue-500 bg-blue-100";
-  if (isMarked && isAnswered) return baseClass + "bg-purple-600 text-white";
-  if (isMarked) return baseClass + "bg-purple-200";
-  if (isAnswered) return baseClass + "bg-green-500 text-white";
-  if (isVisited) return baseClass + "bg-red-100";
-
-  return baseClass + "bg-gray-100";
-};
-
-
-  
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-4 h-full border border-gray-200">
-      <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">Question Palette</h3>
-      <div className="grid grid-cols-4 gap-2 overflow-y-auto max-h-[400px] p-1">
-        {Array.from({ length: totalQuestions }).map((_, index) => (
-          <button
-            key={index}
-            onClick={() => onJump(index)}
-            className={getButtonClass(index)}
-          >
-            {index + 1}
-          </button>
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div className="mt-6 text-xs space-y-2 text-gray-600 border-t pt-4">
-        <div className="flex items-center"><div className="w-3 h-3 bg-green-500 mr-2 rounded"></div> Answered</div>
-        <div className="flex items-center"><div className="w-3 h-3 bg-red-100 border border-red-300 mr-2 rounded"></div> Not Answered</div>
-        <div className="flex items-center"><div className="w-3 h-3 bg-gray-100 border border-gray-300 mr-2 rounded"></div> Not Visited</div>
-        <div className="flex items-center"><div className="w-3 h-3 bg-purple-200 border border-purple-300 mr-2 rounded"></div> Marked for Review</div>
-        <div className="flex items-center"><div className="w-3 h-3 bg-purple-600 mr-2 rounded"></div> Ans & Marked</div>
-      </div>
-    </div>
-  );
-}
-
-/* --------------------------------------------------------
-   Main TestPage Component
----------------------------------------------------------*/
 function TestPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const testId = id;
-    const LOCAL_AUTOSAVE_KEY = `local:test:${testId}`;
 
-  // --- State ---
-  const [test, setTest] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [submissionId, setSubmissionId] = useState(null);
-  const [endTime, setEndTime] = useState(null);
-  const [submissionStatus, setSubmissionStatus] = useState(null);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-   const hasRestoredRef = useRef(false);
-   const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
-  const timerIntervalRef = useRef(null);
+  const {
+    test,
+    questions,
+    currentQuestionIndex,
+    answers,
+    markedQuestions,
+    visitedQuestions,
+    timeLeft,
+    warningCount,
+    loading,
+    error,
+    handleAnswerSelect,
+    handleClearAnswer,
+    handleJump,
+    toggleMark,
+    handleSubmit,
+    addWarning
+  } = useTestEngine(id);
+
+  const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+
+  // --- Proctoring Logic ---
+  useEffect(() => {
+    const handleVisibilityChange = () => { if (document.hidden) addWarning(); };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [addWarning]);
 
-
-
-
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(null);
-  const [warnings, setWarnings] = useState(0);
-
-  const autosaveIntervalRef = useRef(null);
-  const localAutosaveIntervalRef = useRef(null);
-  const [isSaving, setIsSaving] = useState(false);
-   const [lastSavedAt, setLastSavedAt] = useState(null);
-
-
-
-  // Data Storage
-  // We use objects keyed by Question INDEX (0, 1, 2) for local UI state
-  // But we will map back to Question ID when submitting.
-  const [answers, setAnswers] = useState({}); // { index: "Option A" }
-  const [markedQuestions, setMarkedQuestions] = useState([]); // [0, 5, 8] (Indices)
-  const [visitedQuestions, setVisitedQuestions] = useState([0]); // [0, 1, 2] (Indices)
-    
-  // --- 4. Submission Logic ---
-  const handleSubmit = useCallback(
-  async (status = 'COMPLETED') => {
-    if (timerIntervalRef.current) {
-  clearInterval(timerIntervalRef.current);
-  timerIntervalRef.current = null;
-   }
-
-    const examToken = sessionStorage.getItem('examSessionToken');
-    const loginToken = localStorage.getItem('token');
-    if (isSubmitted) return;   // 🔒 prevent re-run
-    setIsSubmitted(true);  
-     if (!examToken) {
-    alert("Session expired. Please refresh.");
-    return;
-  }
-    // 🔥 HARD STOP autosave immediately
-if (autosaveIntervalRef.current) {
-  clearInterval(autosaveIntervalRef.current);
-  autosaveIntervalRef.current = null;
-}
-if (localAutosaveIntervalRef.current) {
-  clearInterval(localAutosaveIntervalRef.current);
-  localAutosaveIntervalRef.current = null;
-};
-
-
-
-    
-
-   
-
-    const formattedAnswers = {};
-    if (test && test.questions) {
-      test.questions.forEach((q) => {
-        if (answers[q.id]) {
-          formattedAnswers[q.id] = answers[q.id];
-        }
-      });
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
-      
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-           Authorization: `Bearer ${examToken}`,
-           },
-
-        body: JSON.stringify({
-          answers: formattedAnswers,
-          status,
-        }),
-      });
-      // 🔴 HARD STOP: test already completed
-        if (response.status === 403) {
-          const data = await response.json();
-
-         if (data.finalSubmissionId) {
-            navigate(`/results/${data.finalSubmissionId}`);
-               return; // 🚨 STOP rendering test page
-             }
-           }
-
-
-      let data;
-const contentType = response.headers.get('content-type');
-
-if (contentType && contentType.includes('application/json')) {
-  data = await response.json();
-} else {
-  const text = await response.text();
-  throw new Error(text || 'Submit failed');
-}
-
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit');
-      }
-
-      // ✅ clear autosave ONLY after successful submit
-      if (submissionId) {
-        const autosaveKey = getAutosaveKey(id, submissionId);
-        localStorage.removeItem(autosaveKey);
-      }
-      setSubmissionStatus(status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED');
-
-      // ✅ single navigation (no duplicate)
-      navigate(`/results/${data.submissionId}`);
-      sessionStorage.removeItem('examSessionToken');
-    } catch (err) {
-      alert('Error submitting test: ' + err.message);
-    }
-  },
-  [id, answers, navigate, loading, test, submissionId]
-  
-);
-
-
-useEffect(() => {
-  if (!submissionId) return;
-  if (submissionStatus !== 'IN_PROGRESS') return;
-
-  const interval = setInterval(() => {
-    const autosaveKey = getAutosaveKey(id, submissionId);
-    localStorage.setItem(
-      autosaveKey,
-      JSON.stringify({
-        answers,
-        markedQuestions,
-        updatedAt: Date.now(),
-      })
-    );
-  }, 10000);
-
-  return () => clearInterval(interval);
-}, [answers, markedQuestions, submissionId, id]);
-
-
-
-
-
-
-
-
-
- // Inside TestPage.jsx
-useEffect(() => {
-  if (submissionStatus !== 'IN_PROGRESS' || !submissionId) return;
-
-  const examToken = sessionStorage.getItem('examSessionToken');
-  if (!examToken) return;
-
-  autosaveIntervalRef.current = setInterval(() => {
-    // Change URL to /autosave and method to PATCH to match test.routes.js
-    fetch(`${API_BASE_URL}/api/tests/${id}/autosave`, {
-      method: 'PATCH', 
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${examToken}`,
-      },
-      body: JSON.stringify({
-        submissionId, // Ensure this matches the controller expectation
-        answers,
-        markedQuestions,
-      }),
-    }).catch((err) => console.error("Autosave failed:", err));
-  }, 30000);
-
-  return () => {
-    if (autosaveIntervalRef.current) clearInterval(autosaveIntervalRef.current);
-  };
-}, [submissionId, submissionStatus, id, answers, markedQuestions]); // Added dependencies to ensure current state is sent
-
-
- useEffect(() => {
-  if (!submissionId || !test || hasRestoredRef.current) return;
-
-  const autosaveKey = getAutosaveKey(id, submissionId);
-  const saved = localStorage.getItem(autosaveKey);
-
-  if (!saved) {
-    hasRestoredRef.current = true;
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(saved);
-
-    if (parsed.answers && typeof parsed.answers === 'object') {
-      setAnswers(parsed.answers);
-    }
-
-    if (Array.isArray(parsed.markedQuestions)) {
-      setMarkedQuestions(parsed.markedQuestions);
-    }
-
-    console.log('✅ Autosave restored correctly');
-  } catch (e) {
-    console.error('❌ Autosave restore failed', e);
-  }
-
-  hasRestoredRef.current = true;
-}, [submissionId, test, id]);
-
-
-
-
-// --- 1. Fetch & Init ---
-// --- Step A, B, C: Init Test ---
-useEffect(() => {
-  let isMounted = true;
-
-  const initTest = async () => {
-    // 🔥 HARD RESET for fresh attempt
-setIsSubmitted(false);
-setSubmissionStatus(null);
-setEndTime(null);
-setTimeLeft(null);
-hasRestoredRef.current = false;
-
-if (timerIntervalRef.current) {
-  clearInterval(timerIntervalRef.current);
-  timerIntervalRef.current = null;
-}
-
-    const loginToken = localStorage.getItem('token');
-    if (!loginToken) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      const startRes = await fetch(
-        `http://localhost:8000/api/tests/${id}/start`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${loginToken}` },
-        }
-      );
-
-      if (!startRes.ok) {
-        const err = await startRes.json();
-        throw new Error(err.error || 'Start failed');
-      }
-
-      const sessionData = await startRes.json();
-
-      if (!isMounted) return;
-
-      setSubmissionStatus(sessionData.status || 'IN_PROGRESS');
-      setSubmissionId(sessionData.submissionId);
-      sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
-
-      const testRes = await fetch(`http://localhost:8000/api/tests/${id}`, {
-        headers: {
-          Authorization: `Bearer ${sessionData.examSessionToken}`,
-        },
-      });
-
-      const data = await testRes.json();
-
-      // Inside initTest after setTest(data);
-if (sessionData.draft) {
-  const { answers: savedAnswers, markedQuestions: savedMarked } = sessionData.draft;
-  
-  if (savedAnswers) setAnswers(savedAnswers);
-  if (savedMarked) setMarkedQuestions(savedMarked);
-  
-  // Mark all questions that have answers as "visited"
-  const savedVisited = Object.keys(savedAnswers || {}).map(id => 
-    data.questions.findIndex(q => q.id === parseInt(id))
-  ).filter(index => index !== -1);
-  
-  setVisitedQuestions(prev => [...new Set([...prev, ...savedVisited])]);
-}
-
-      
-      if (!isMounted) return;
-
-      setTest(data);
-
-      const startTime = new Date(sessionData.startTime).getTime();
-const end = startTime + data.duration * 60 * 1000;
-
-setEndTime(end);
-setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  initTest();
-  return () => {
-    isMounted = false;
-  };
-}, [id, navigate]);
-
-
-      // --- Step D: Timer & Auto Submit ---
-useEffect(() => {
-  if (submissionStatus !== 'IN_PROGRESS' || isSubmitted) return;
-  if (!endTime) return;
-
-  timerIntervalRef.current = setInterval(() => {
-    const remaining = Math.max(
-      0,
-      Math.floor((endTime - Date.now()) / 1000)
-    );
-
-    setTimeLeft(remaining);
-
-    if (remaining === 0) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-      handleSubmit('TIMEOUT');
-    }
-  }, 1000);
-
-  return () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-  };
-}, [endTime, submissionStatus, isSubmitted, handleSubmit]);
-
-
-
-  
-
-
-  // --- 2. Navigation Handlers ---
-  const handleJump = (index) => {
-    setCurrentQuestionIndex(index);
-    if (!visitedQuestions.includes(index)) {
-      setVisitedQuestions([...visitedQuestions, index]);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentQuestionIndex < test.questions.length - 1) {
-      handleJump(currentQuestionIndex + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentQuestionIndex > 0) {
-      handleJump(currentQuestionIndex - 1);
-    }
-  };
-
-  // --- 3. Interaction Handlers ---
-  const handleAnswerSelect = (option) => {
-  const questionId = test.questions[currentQuestionIndex].id;
-
-  setAnswers(prev => ({
-    ...prev,
-    [questionId]: option
-  }));
-};
-
-const handleAnswerChange = (questionId, value) => {
-  setAnswers(prev => ({
-    ...prev,
-    [questionId]: value
-  }));
-};
-
-
-
-  const handleClearResponse = () => {
-    const newAnswers = { ...answers };
-    const questionId = test.questions[currentQuestionIndex].id;
-    delete newAnswers[questionId];
-
-    setAnswers(newAnswers);
-  };
-
-  const toggleMarkForReview = () => {
-  if (markedQuestions.includes(currentQuestionIndex)) {
-    setMarkedQuestions(markedQuestions.filter(i => i !== currentQuestionIndex));
-  } else {
-    setMarkedQuestions([...markedQuestions, currentQuestionIndex]);
-  }
-};
-
-
- useEffect(() => {
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      handleViolation();
-    }
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  return () => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-  };
-}, []);
-
-
-const handleViolation = () => {
-  setWarnings(prev => {
-    const updated = prev + 1;
-
-    if (updated >= MAX_WARNINGS) {
-      alert('Violation Limit Reached. Test Terminated');
-      handleSubmit('TERMINATED');
-    }
-
-    return updated; // ✅ THIS WAS MISSING
-  });
-};
-
-
-  
-  
-
-  // Full Screen Detection
   useEffect(() => {
     const handleFullScreenChange = () => {
-      // If fullscreenElement is null, it means we exited full screen
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        handleViolation();
-        // Open the modal (if not terminated yet)
+        addWarning();
         setIsFullScreenModalOpen(true);
       }
     };
-
-    document.addEventListener('fullscreenchange', handleFullScreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullScreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullScreenChange);
-
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(
+      event => document.addEventListener(event, handleFullScreenChange)
+    );
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullScreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullScreenChange);
-      document.removeEventListener('MSFullscreenChange', handleFullScreenChange);
+      ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(
+        event => document.removeEventListener(event, handleFullScreenChange)
+      );
     };
-  }, [handleViolation]);
+  }, [addWarning]);
 
-  // Handle "OK" click on Warning Modal
+  useEffect(() => {
+    const block = e => e.preventDefault();
+    ['contextmenu', 'copy', 'cut', 'paste'].forEach(event => document.addEventListener(event, block));
+    return () => ['contextmenu', 'copy', 'cut', 'paste'].forEach(event => document.removeEventListener(event, block));
+  }, []);
+
   const handleFixFullScreen = async () => {
     try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
-      } else if (document.documentElement.webkitRequestFullscreen) {
-        await document.documentElement.webkitRequestFullscreen();
-      }
+      if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+      else if (document.documentElement.webkitRequestFullscreen) await document.documentElement.webkitRequestFullscreen();
       setIsFullScreenModalOpen(false);
     } catch (err) {
       console.error("Failed to re-enter full screen", err);
-      // We close the modal anyway; if they are still not in FS, listener won't fire again 
-      // immediately, but next exit attempt will trigger it.
       setIsFullScreenModalOpen(false);
     }
   };
 
-  // No-Copy Shield
-  useEffect(() => {
-    const block = e => e.preventDefault();
-    document.addEventListener('contextmenu', block);
-    document.addEventListener('copy', block);
-    document.addEventListener('cut', block);
-    document.addEventListener('paste', block);
-    return () => {
-      document.removeEventListener('contextmenu', block);
-      document.removeEventListener('copy', block);
-      document.removeEventListener('cut', block);
-      document.removeEventListener('paste', block);
-    };
-  }, []);
+  if (loading) return <div className="flex h-screen items-center justify-center text-gray-500 font-medium animate-pulse">Loading...</div>;
+  if (error) return <div className="flex h-screen items-center justify-center text-red-500 font-bold">{error}</div>;
+  if (!test || !questions || questions.length === 0) return <div className="flex h-screen items-center justify-center">No Data</div>;
 
-  if (loading) {
-  return <div className="flex h-screen items-center justify-center">Loading Test...</div>;
-}
+  const currentQuestion = questions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
-if (error) {
-  return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
-}
-
-if (!test || !test.questions || test.questions.length === 0) {
-  return <div className="flex h-screen items-center justify-center">Test data not available</div>;
-}
-
-
-
-  if (loading) return <div className="flex h-screen items-center justify-center text-lg">Loading Test...</div>;
-  if (error) return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
-
-  const currentQuestion =
-  test && test.questions && test.questions[currentQuestionIndex]
-    ? test.questions[currentQuestionIndex]
-    : null;
-   if (!currentQuestion) {
-  return <div className="flex h-screen items-center justify-center">Loading Question...</div>;
-}
-
+  const handleNext = () => {
+    if (currentQuestionIndex < questions.length - 1) handleJump(currentQuestionIndex + 1);
+  };
+  const handlePrev = () => {
+    if (currentQuestionIndex > 0) handleJump(currentQuestionIndex - 1);
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 select-none">
-
-      {/* Header / Timer */}
-     {endTime && <TimerDisplay seconds={timeLeft} />}
-
-      <WarningBanner count={warnings} />
-
-      {/* Main Layout */}
-      <div className="flex grow overflow-hidden">
-
-        {/* Left: Question Area (75%) */}
-        <div className="w-3/4 flex flex-col p-6 overflow-y-auto">
-
-          {/* Question Header */}
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Question {currentQuestionIndex + 1}</h2>
-            <div className="text-sm text-gray-500">
-              {test?.title || ''}
-
-            </div>
-          </div>
-
-          {/* Question Box */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6 min-h-[200px]">
-            <p className="text-lg text-gray-800 leading-relaxed whitespace-pre-wrap">
-              {currentQuestion.text}
-            </p>
-          </div>
-{/* Options */}
-<div className="space-y-3 mb-8">
-  {currentQuestion.options.map((option, index) => (
-    <label
-      key={index}
-      className={`flex items-center p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 
-        ${answers[currentQuestion.id] === option
-          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-          : 'border-gray-200 bg-white'}`}
-    >
-      <input
-        type="radio"
-        name={`question_${currentQuestion.id}`}
-        value={option}
-        checked={answers[currentQuestion.id] === option}
-        onChange={() => handleAnswerSelect(option)}
-        className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300"
+    <div className="h-screen bg-[#F3F4F6] flex flex-col font-sans select-none overflow-hidden">
+      
+      {/* --- HEADER --- */}
+      {/* Used 'relative' on header and 'absolute' on child items to force positioning */}
+      <header className="bg-white shadow-sm flex-none z-20 h-20 w-full relative flex items-center justify-center px-6">
+        
+        {/* 1. LEFT: Logo & Branding (Pinned Left) */}
+        <div className="absolute left-6 top-1/2 transform -translate-y-1/2 flex items-center gap-3">
+   {/* Logo Image */}
+   <div className="w-10 h-10 flex items-center justify-center">
+      <img 
+        src="/img/Original Logo.PNG" 
+        alt="Team Mavericks Logo" 
+        className="w-full h-full object-contain" 
       />
-      <span className="ml-3 text-gray-700 font-medium">{option}</span>
-    </label>
-  ))}
-</div>
+   </div>
+   
+   {/* Branding Text */}
+   <div className="flex flex-col hidden md:flex">
+      <span className="font-black text-gray-800 text-lg uppercase tracking-widest leading-none">Team</span>
+      <span className="font-black text-blue-600 text-lg uppercase tracking-widest leading-none">Mavericks</span>
+   </div>
+   </div>
 
-
-          {/* Action Buttons */}
-          <div className="mt-auto pt-6 border-t flex justify-between items-center">
-
-            <div className="space-x-3">
-              <button
-                onClick={handleClearResponse}
-                className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 font-medium transition"
-              >
-                Clear Response
-              </button>
-              <button
-                onClick={toggleMarkForReview}
-                className={`px-4 py-2 border rounded font-medium transition
-                  ${markedQuestions.includes(currentQuestionIndex)
-                    ? 'bg-purple-100 text-purple-700 border-purple-300'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {markedQuestions.includes(currentQuestionIndex) ? 'Unmark Review' : 'Mark for Review'}
-              </button>
-            </div>
-
-            <div className="space-x-3">
-              <button
-                onClick={handlePrev}
-                disabled={currentQuestionIndex === 0}
-                className={`px-6 py-2 rounded font-medium transition
-                  ${currentQuestionIndex === 0
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-gray-600 text-white hover:bg-gray-700'}`}
-              >
-                Previous
-              </button>
-
-              {currentQuestionIndex === test.questions.length - 1 ? (
-                <button
-                  onClick={() => {
-                    if (window.confirm("Are you sure you want to submit the test?")) {
-                      handleSubmit('COMPLETED');
-                    }
-                  }}
-                  className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-md transition"
-                >
-                  Submit Test
-                </button>
-              ) : (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold transition"
-                >
-                  Next & Save
-                </button>
-              )}
-            </div>
-          </div>
+        {/* 2. CENTER: Test Name (Centered absolutely) */}
+        <div className="text-center">
+           <h1 className="text-xl font-bold text-gray-900">Online Test Platform</h1>
+           <p className="text-xs text-gray-500 font-medium mt-0.5">{test?.title || 'Session 1'}</p>
         </div>
-
-        {/* Right: Question Palette (25%) */}
-        <div className="w-1/4 p-4 bg-gray-100 border-l border-gray-200 overflow-y-auto">
-         <QuestionPalette
-  questions={test.questions}   // ✅ THIS LINE FIXES EVERYTHING
-  totalQuestions={test.questions.length}
-  currentQuestionIndex={currentQuestionIndex}
-  answers={answers}
-  markedQuestions={markedQuestions}
-  visitedQuestions={visitedQuestions}
-  onJump={handleJump}
-/>
-
-
+        
+        {/* 3. RIGHT: Timer (Pinned Right) */}
+        <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex items-center">
+           <div className="bg-white px-5 py-2 rounded-full border border-gray-200 shadow-sm flex items-center gap-3">
+              <div className="bg-purple-100 p-2 rounded-full">
+                 <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              </div>
+              <div className="flex flex-col items-start justify-center leading-none">
+                 <span className="text-lg font-bold text-gray-800 font-mono">
+                    {timeLeft !== null && <TimerDisplay seconds={timeLeft} />}
+                 </span>
+                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Time Left</span>
+              </div>
+           </div>
         </div>
+      </header>
 
+      {/* --- PROGRESS BAR --- */}
+      <div className="w-full bg-gray-200 h-1 flex-none">
+        <div 
+          className="bg-purple-600 h-1 transition-all duration-300 ease-out" 
+          style={{ width: `${progress}%` }}
+        ></div>
       </div>
 
-      {/* Full Screen Warning Modal */}
-      <Modal
-        isOpen={isFullScreenModalOpen}
-        onClose={handleFixFullScreen}
-        title="Security Warning"
-        actions={
-          <button onClick={handleFixFullScreen} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-semibold shadow-md">
-            OK, Return to Full Screen
-          </button>
-        }
-      >
-        <div className="text-center">
-          <div className="text-5xl mb-4">⚠️</div>
-          <h3 className="text-xl font-bold text-red-600 mb-2">Full-Screen Mode Required</h3>
-          <p className="text-gray-600">
-            You have exited full-screen mode. This has been recorded as a <span className="font-bold text-red-500">violation ({warnings}/{MAX_WARNINGS})</span>.
-          </p>
-          <p className="text-sm text-gray-500 mt-4">
-            Please click <strong>OK</strong> to return to full-screen mode and continue the test.
-          </p>
+      <WarningBanner count={warningCount} />
+
+      {/* --- MAIN LAYOUT --- */}
+      <div className="flex-grow p-4 md:p-6 overflow-hidden">
+        <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* LEFT: Question Card */}
+          <div className="lg:col-span-9 h-full flex flex-col">
+            <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8 flex flex-col h-full">
+              
+              {/* Question Content */}
+              <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
+                <div className="flex justify-between items-start mb-6">
+                  <h2 className="text-gray-400 font-medium text-lg">Question {currentQuestionIndex + 1}</h2>
+                </div>
+
+                <div className="mb-8">
+                   <p className="text-xl font-bold text-gray-800 leading-relaxed">{currentQuestion.text}</p>
+                </div>
+
+                <div className="space-y-4 mb-4">
+                  {currentQuestion.options.map((option, index) => {
+                    const isSelected = answers[currentQuestion.id] === option;
+                    return (
+                      <div 
+                        key={index}
+                        onClick={() => handleAnswerSelect(option)}
+                        className={`group flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all duration-200
+                          ${isSelected 
+                            ? 'border-purple-500 bg-purple-50/50 shadow-sm' 
+                            : 'border-gray-100 bg-white hover:border-purple-200 hover:bg-gray-50'
+                          }`}
+                      >
+                        <span className={`text-lg font-medium ${isSelected ? 'text-purple-900' : 'text-gray-600 group-hover:text-gray-900'}`}>
+                          {option}
+                        </span>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors
+                          ${isSelected ? 'border-purple-500' : 'border-gray-300 group-hover:border-purple-300'}`}>
+                          {isSelected && <div className="w-3 h-3 rounded-full bg-purple-600"></div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <div className="mt-4 pt-6 border-t border-gray-100 flex flex-wrap justify-between items-center gap-4 flex-none">
+                
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={toggleMark}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors border
+                      ${markedQuestions.includes(currentQuestionIndex)
+                        ? 'bg-orange-50 text-orange-700 border-orange-200'
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+                     {markedQuestions.includes(currentQuestionIndex) ? 'Marked' : 'Review'}
+                  </button>
+
+                  <button 
+                    onClick={handleClearAnswer}
+                    className="text-sm text-gray-400 hover:text-red-500 transition-colors font-medium"
+                  >
+                    Clear Response
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                   <button
+                      onClick={handlePrev}
+                      disabled={currentQuestionIndex === 0}
+                      className={`px-6 py-2.5 rounded-full font-bold transition-all
+                         ${currentQuestionIndex === 0 
+                           ? 'text-gray-300 cursor-not-allowed' 
+                           : 'text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+                   >
+                      Previous
+                   </button>
+
+                   {currentQuestionIndex === questions.length - 1 ? (
+                      <button
+                         onClick={() => {
+                           if (window.confirm("Are you sure you want to submit the test?")) handleSubmit('COMPLETED');
+                         }}
+                         className="px-8 py-2.5 rounded-full bg-purple-600 text-white font-bold shadow-lg shadow-purple-200 hover:bg-purple-700 transition-all active:scale-95"
+                      >
+                         Finish Test
+                      </button>
+                   ) : (
+                      <button
+                         onClick={handleNext}
+                         className="px-8 py-2.5 rounded-full bg-gray-900 text-white font-bold shadow-lg hover:bg-black transition-all active:scale-95 flex items-center gap-2"
+                      >
+                         Next <span className="text-xl leading-none">&rsaquo;</span>
+                      </button>
+                   )}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Palette */}
+          <div className="lg:col-span-3 h-full">
+             <div className="bg-white rounded-3xl shadow-sm p-6 h-full flex flex-col">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex-none">Question Palette</h3>
+                <div className="flex-grow overflow-hidden">
+                  <QuestionPalette
+                    questions={questions}
+                    totalQuestions={questions.length}
+                    currentQuestionIndex={currentQuestionIndex}
+                    answers={answers}
+                    markedQuestions={markedQuestions}
+                    visitedQuestions={visitedQuestions}
+                    onJump={handleJump}
+                  />
+                </div>
+             </div>
+          </div>
+
+        </div>
+      </div>
+
+      <Modal isOpen={isFullScreenModalOpen} onClose={handleFixFullScreen} title="Security Alert">
+        <div className="text-center p-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Full Screen Required</h3>
+          <p className="text-gray-500 mb-6">You exited full-screen mode. <span className="font-bold text-red-600">Warning {warningCount}/{MAX_WARNINGS}</span></p>
+          <button onClick={handleFixFullScreen} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition">Return to Test</button>
         </div>
       </Modal>
+
     </div>
   );
 }

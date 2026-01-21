@@ -1,7 +1,6 @@
 import clsx from "clsx";
 import gsap from "gsap";
-import { useWindowScroll } from "react-use";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { TiLocationArrow } from "react-icons/ti";
 import { Link, useNavigate } from "react-router-dom"; // Added for routing
 
@@ -29,9 +28,9 @@ const Navbar = () => {
   const audioElementRef = useRef(null);
   const navContainerRef = useRef(null);
 
-  const { y: currentScrollY } = useWindowScroll();
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  // Use Ref for lastScrollY to avoid triggering re-renders just for tracking
+  const lastScrollYRef = useRef(0);
 
   const toggleAudioIndicator = () => {
     setIsAudioPlaying((prev) => !prev);
@@ -47,18 +46,25 @@ const Navbar = () => {
   }, [isAudioPlaying]);
 
   useEffect(() => {
-    if (currentScrollY === 0) {
-      setIsNavVisible(true);
-      navContainerRef.current.classList.remove("floating-nav");
-    } else if (currentScrollY > lastScrollY) {
-      setIsNavVisible(false);
-      navContainerRef.current.classList.add("floating-nav");
-    } else if (currentScrollY < lastScrollY) {
-      setIsNavVisible(true);
-      navContainerRef.current.classList.add("floating-nav");
-    }
-    setLastScrollY(currentScrollY);
-  }, [currentScrollY, lastScrollY]);
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      if (currentScrollY === 0) {
+        setIsNavVisible(true);
+        navContainerRef.current.classList.remove("floating-nav");
+      } else if (currentScrollY > lastScrollYRef.current) {
+        setIsNavVisible(false);
+        navContainerRef.current.classList.add("floating-nav");
+      } else if (currentScrollY < lastScrollYRef.current) {
+        setIsNavVisible(true);
+        navContainerRef.current.classList.add("floating-nav");
+      }
+      lastScrollYRef.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     gsap.to(navContainerRef.current, {
@@ -78,7 +84,7 @@ const Navbar = () => {
     >
       <header className="absolute top-1/2 w-full -translate-y-1/2">
         <nav className="flex size-full items-center justify-between p-4">
-          
+
           {/* --- LEFT SIDE: LOGO --- */}
           <div className="flex items-center gap-7">
             <Link to="/">
@@ -96,7 +102,7 @@ const Navbar = () => {
 
           {/* --- RIGHT SIDE: LINKS & AUDIO --- */}
           <div className="flex h-full items-center">
-            
+
             {/* 1. DYNAMIC NAV LINKS (Team's Logic + Your Style) */}
             <div className="hidden md:block">
               {/* Common Link */}
@@ -110,7 +116,7 @@ const Navbar = () => {
                   <Link to="/dashboard" className="nav-hover-btn">
                     Dashboard
                   </Link>
-                  
+
                   <Link to="/my-results" className="nav-hover-btn">
                     My Results
                   </Link>

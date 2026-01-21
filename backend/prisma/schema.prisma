@@ -92,6 +92,9 @@ model TestSubmission {
   student   User     @relation(fields: [studentId], references: [id])
   
   answers   Answer[] // A submission is made up of many answers
+
+  @@index([testId])
+  @@index([studentId])
 }
 
 model Answer {

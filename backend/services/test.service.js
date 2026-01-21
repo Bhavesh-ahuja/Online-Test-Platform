@@ -8,6 +8,13 @@ class TestService {
     async createTest(data, userId) {
         const { title, description, duration, questions, scheduledStart, scheduledEnd } = data;
 
+        if (scheduledStart && scheduledEnd && new Date(scheduledStart) >= new Date(scheduledEnd)) {
+            throw new AppError('Scheduled End time must be after Start time', 400);
+        }
+        if (scheduledStart && new Date(scheduledStart) < new Date(new Date().getTime() - 60000)) { // Allow 1 min buffer
+            throw new AppError('Scheduled Start time cannot be in the past', 400);
+        }
+
         return await prisma.test.create({
             data: {
                 title,
@@ -56,6 +63,9 @@ class TestService {
 
 
         // 4. Handle Questions Logic
+        if (data.scheduledStart && data.scheduledEnd && new Date(data.scheduledStart) >= new Date(data.scheduledEnd)) {
+            throw new AppError('Scheduled End time must be after Start time', 400);
+        }
         if (data.questions && data.questions.length > 0) {
             if (!hasSubmissions) {
                 updateData.questions = {
@@ -79,69 +89,72 @@ class TestService {
     }
 
     async startTest(testId, studentId) {
-        const test = await prisma.test.findUnique({ where: { id: parseInt(testId) } });
-        if (!test) throw new AppError('Test not found', 404);
+        return await prisma.$transaction(async (tx) => {
+            const test = await tx.test.findUnique({ where: { id: parseInt(testId) } });
+            if (!test) throw new AppError('Test not found', 404);
 
-        const now = new Date();
-        if (test.scheduledStart && now < new Date(test.scheduledStart)) {
-            throw new AppError(`Test has not started yet. Starts at: ${new Date(test.scheduledStart).toLocaleString()}`, 403);
-        }
-        if (test.scheduledEnd && now > new Date(test.scheduledEnd)) {
-            throw new AppError('Test window has closed.', 403);
-        }
-
-        const submissions = await prisma.testSubmission.findMany({
-            where: { testId: parseInt(testId), studentId },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        const inProgress = submissions.find(s => s.status === 'IN_PROGRESS');
-        const completedCount = submissions.filter(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status)).length;
-
-        if (inProgress) {
-            const examSessionToken = createExamSessionToken({
-                submissionId: inProgress.id,
-                testId: test.id,
-                studentId: inProgress.studentId,
-                expiresInSeconds: test.duration * 60 + 15 * 60
-            });
-            return {
-                message: 'Resuming test',
-                startTime: inProgress.createdAt,
-                submissionId: inProgress.id,
-                examSessionToken,
-                draft: inProgress.answersDraft ?? null
-            };
-        }
-
-        if (test.attemptType === 'LIMITED' && test.maxAttempts !== null && completedCount >= test.maxAttempts) {
-            throw new AppError('Maximum attempts reached', 403);
-        }
-
-        const submission = await prisma.testSubmission.create({
-            data: {
-                testId: parseInt(testId),
-                studentId,
-                status: 'IN_PROGRESS',
-                score: 0
+            const now = new Date();
+            if (test.scheduledStart && now < new Date(test.scheduledStart)) {
+                throw new AppError(`Test has not started yet. Starts at: ${new Date(test.scheduledStart).toLocaleString()}`, 403);
             }
-        });
+            if (test.scheduledEnd && now > new Date(test.scheduledEnd)) {
+                throw new AppError('Test window has closed.', 403);
+            }
 
-        const durationInSeconds = test.duration * 60;
-        const bufferInSeconds = 15 * 60;
-        const examSessionToken = createExamSessionToken({
-            submissionId: submission.id,
-            testId: test.id,
-            studentId: submission.studentId,
-            expiresInSeconds: durationInSeconds + bufferInSeconds
-        });
+            // Lock the submissions check
+            const submissions = await tx.testSubmission.findMany({
+                where: { testId: parseInt(testId), studentId },
+                orderBy: { createdAt: 'desc' }
+            });
 
-        return {
-            message: 'Test started',
-            startTime: submission.createdAt,
-            submissionId: submission.id,
-            examSessionToken
-        };
+            const inProgress = submissions.find(s => s.status === 'IN_PROGRESS');
+            const completedCount = submissions.filter(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status)).length;
+
+            if (inProgress) {
+                const examSessionToken = createExamSessionToken({
+                    submissionId: inProgress.id,
+                    testId: test.id,
+                    studentId: inProgress.studentId,
+                    expiresInSeconds: test.duration * 60 + 15 * 60
+                });
+                return {
+                    message: 'Resuming test',
+                    startTime: inProgress.createdAt,
+                    submissionId: inProgress.id,
+                    examSessionToken,
+                    draft: inProgress.answersDraft ?? null
+                };
+            }
+
+            if (test.attemptType === 'LIMITED' && test.maxAttempts !== null && completedCount >= test.maxAttempts) {
+                throw new AppError('Maximum attempts reached', 403);
+            }
+
+            const submission = await tx.testSubmission.create({
+                data: {
+                    testId: parseInt(testId),
+                    studentId,
+                    status: 'IN_PROGRESS',
+                    score: 0
+                }
+            });
+
+            const durationInSeconds = test.duration * 60;
+            const bufferInSeconds = 15 * 60;
+            const examSessionToken = createExamSessionToken({
+                submissionId: submission.id,
+                testId: test.id,
+                studentId: submission.studentId,
+                expiresInSeconds: durationInSeconds + bufferInSeconds
+            });
+
+            return {
+                message: 'Test started',
+                startTime: submission.createdAt,
+                submissionId: submission.id,
+                examSessionToken
+            };
+        });
     }
 
     async getAllTests() {
@@ -169,7 +182,10 @@ class TestService {
 
         const test = await prisma.test.findUnique({
             where: { id: parseInt(id) },
-            include: includeOptions
+            include: {
+                ...includeOptions,
+                _count: { select: { submissions: true } }
+            }
         });
 
         if (!test) throw new AppError('Test not found', 404);
@@ -216,7 +232,7 @@ class TestService {
                 where: { id: submission.id },
                 data: {
                     score,
-                    status: status === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED',
+                    status: ['TIMEOUT', 'TERMINATED'].includes(status) ? status : 'COMPLETED',
                 },
             }),
         ]);
@@ -254,14 +270,28 @@ class TestService {
         });
     }
 
-    async getTestSubmissions(testId) {
-        return await prisma.testSubmission.findMany({
-            where: { testId: parseInt(testId) },
-            include: {
-                student: { select: { email: true, id: true } },
-            },
-            orderBy: { score: 'desc' }
-        });
+    async getTestSubmissions(testId, page = 1, limit = 10) {
+        const skip = (page - 1) * limit;
+
+        const [total, submissions] = await prisma.$transaction([
+            prisma.testSubmission.count({ where: { testId: parseInt(testId) } }),
+            prisma.testSubmission.findMany({
+                where: { testId: parseInt(testId) },
+                include: {
+                    student: { select: { email: true, id: true } },
+                },
+                orderBy: { score: 'desc' },
+                skip,
+                take: limit
+            })
+        ]);
+
+        return {
+            submissions,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page
+        };
     }
 
     async deleteTest(id) {
@@ -303,7 +333,7 @@ class TestService {
         }
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL_ID || "models/gemini-2.5-flash" });
 
         const prompt = `
       You are an exam parser helper.

@@ -6,15 +6,15 @@ import catchAsync from '../utils/catchAsync.js';
    CREATE TEST
 ========================= */
 export const createTest = catchAsync(async (req, res) => {
-    const newTest = await TestService.createTest(req.body, req.user.userId);
-    res.status(201).json(newTest);
-  });
+  const newTest = await TestService.createTest(req.body, req.user.userId);
+  res.status(201).json(newTest);
+});
 
 export const updateTest = catchAsync(async (req, res) => {
   const { id } = req.params;
   const updatedTest = await TestService.updateTest(id, req.body, req.user.role, req.user.userId);
   res.json(updatedTest);
-  
+
 });
 
 /* =========================
@@ -72,8 +72,11 @@ export const getMySubmissions = catchAsync(async (req, res) => {
 
 export const getTestSubmissions = catchAsync(async (req, res) => {
   const { id } = req.params; // Test ID
-  const submissions = await TestService.getTestSubmissions(id);
-  res.json(submissions);
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+
+  const result = await TestService.getTestSubmissions(id, page, limit);
+  res.json(result);
 });
 
 export const deleteTest = catchAsync(async (req, res) => {
@@ -92,4 +95,3 @@ export const autosaveTestProgress = catchAsync(async (req, res) => {
   await TestService.autosaveTestProgress(req.examSession, req.body);
   res.json({ success: true });
 });
-
