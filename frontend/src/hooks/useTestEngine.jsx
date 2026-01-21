@@ -158,7 +158,6 @@ export function useTestEngine(testId) {
         handleClearAnswer,
         handleJump,
         toggleMark,
-        toggleMark,
         handleSubmit,
         addWarning,
         navigate // Expose navigate for "Exit" button
