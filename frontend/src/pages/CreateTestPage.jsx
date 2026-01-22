@@ -62,6 +62,21 @@ function CreateTestPage() {
     setQuestions(newQuestions);
   };
 
+  const handleQuestionKeyDown = (e, qi) => {
+  if (e.key === 'Enter') {
+    if (e.shiftKey) {
+      // Allow default behavior (new line in textarea)
+      return;
+    } else {
+      // Prevent new line and move to next field
+      e.preventDefault();
+      // Target the first option input of the current question index
+      const nextField = document.querySelector(`input[name="q-${qi}-opt-0"]`);
+      if (nextField) nextField.focus();
+    }
+  }
+};
+
   // --- Option Management ---
 
   const addOption = (qi) => {
@@ -353,16 +368,20 @@ function CreateTestPage() {
                 🗑️
               </button>
 
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Question {qi + 1}</label>
-                <input
-                  className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white"
-                  placeholder="Enter question text..."
-                  value={q.text}
-                  onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
-                  required
-                />
-              </div>
+               <input />
+<div className="mb-4">
+  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+    Question {qi + 1}
+  </label>
+  <textarea
+    className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white resize-none"
+    placeholder="Enter question text... "
+    value={q.text}
+    onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
+    onKeyDown={(e) => handleQuestionKeyDown(e, qi)}
+    required
+  />
+</div>
 
               <div className="space-y-2 mb-4">
                 <label className="block text-xs font-bold text-gray-400 uppercase">Options</label>
@@ -370,12 +389,13 @@ function CreateTestPage() {
                   <div key={oi} className="flex gap-2 items-center">
                     <span className="text-gray-400 font-mono text-sm w-4">{String.fromCharCode(65 + oi)}</span>
                     <input
-                      className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
-                      placeholder={`Option ${oi + 1}`}
-                      value={opt}
-                      onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
-                      required
-                    />
+  name={`q-${qi}-opt-${oi}`} // Add this name attribute
+  className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
+  placeholder={`Option ${oi + 1}`}
+  value={opt}
+  onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
+  required
+/>
                     <button
                       type="button"
                       className="text-gray-300 hover:text-red-500 transition"
