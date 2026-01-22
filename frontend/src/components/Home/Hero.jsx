@@ -153,7 +153,7 @@ const Hero = () => {
             </h1>
 
             <p className="mb-5 max-w-64 font-robert-regular text-blue-100">
-              Connects students through challenges that turn skills into careers. <br /> Unleash the Play Economy
+              Connects students through <br /> challenges that turn skills into careers.
             </p>
 
             <Button

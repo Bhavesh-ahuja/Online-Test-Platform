@@ -72,7 +72,7 @@ function RegisterPage() {
             </div>
 
             {/* Google Sign Up Button */}
-            <div className="flex justify-center lg:justify-start">
+            {/* <div className="flex justify-center lg:justify-start">
                <button 
                 type="button" 
                 className="flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-6 py-3 rounded-full transition-all duration-300 backdrop-blur-sm group"
@@ -80,7 +80,7 @@ function RegisterPage() {
                 <FcGoogle className="text-2xl group-hover:scale-110 transition-transform" /> 
                 <span className="font-medium tracking-wide">Sign up with Google</span>
               </button>
-            </div>
+            </div> */}
 
             {/* Login Link */}
             <p className="text-gray-500 mt-6">
