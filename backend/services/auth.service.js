@@ -4,17 +4,31 @@ import jwt from 'jsonwebtoken';
 import AppError from '../utils/AppError.js';
 
 class AuthService {
-  async register(email, password, role) {
+  async register(email, password, fullName, badgeNumber, year, prn, role = 'STUDENT') {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       throw new AppError('Email already in use', 400);
+    }
+
+    // Check if PRN is already registered to maintain unique identity
+    const existingPrn = await prisma.user.findUnique({ where: { prn } });
+    if (existingPrn) {
+      throw new AppError('PRN already registered', 400);
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = await prisma.user.create({
-      data: { email, password: hashedPassword, role },
+      data: { 
+        email, 
+        password: hashedPassword, 
+        fullName,      // Saved as a single string
+        badgeNumber,   // Saved as provided by user
+        year,          // Saved as provided by user
+        prn,           // Saved as provided by user
+        role 
+      },
     });
 
     const { password: _, ...userWithoutPassword } = newUser;
@@ -38,10 +52,11 @@ class AuthService {
       { expiresIn: '1h' }
     );
 
+    // Return user details including identity fields so the frontend can store them
+    const { password: _, ...userWithoutPassword } = user;
     return {
-      message: 'Login successful',
+      user: userWithoutPassword,
       token,
-      user: { id: user.id, email: user.email, role: user.role },
     };
   }
 }

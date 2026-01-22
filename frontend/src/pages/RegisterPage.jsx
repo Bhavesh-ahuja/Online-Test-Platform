@@ -8,10 +8,14 @@ function RegisterPage() {
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    role: 'STUDENT'
-  });
+  email: '',
+  password: '',
+  fullName: '',    // New
+  badgeNumber: '', // New
+  year: '',        // New
+  prn: '',         // New
+  role: 'STUDENT'
+});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -140,6 +144,65 @@ function RegisterPage() {
                     onChange={handleChange}
                   />
                 </div>
+
+                <div className="space-y-4">
+  {/* Full Name */}
+  <div className="space-y-1">
+    <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Full Name</label>
+    <input
+      name="fullName"
+      type="text"
+      required
+      placeholder="e.g. Bhavesh Ahuja"
+      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
+      value={formData.fullName}
+      onChange={handleChange}
+    />
+  </div>
+
+  {/* PRN */}
+  <div className="space-y-1">
+    <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">PRN (Permanent Reg. No.)</label>
+    <input
+      name="prn"
+      type="text"
+      required
+      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
+      value={formData.prn}
+      onChange={handleChange}
+    />
+  </div>
+
+  {/* Badge and Year Grid */}
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-1">
+      <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Badge No.</label>
+      <input
+        name="badgeNumber"
+        type="text"
+        required
+        className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
+        value={formData.badgeNumber}
+        onChange={handleChange}
+      />
+    </div>
+    <div className="space-y-1">
+      <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Year</label>
+      <select
+        name="year"
+        className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
+        value={formData.year}
+        onChange={handleChange}
+      >
+        <option value="">Select Year</option>
+        <option value="FE">First Year</option>
+        <option value="SE">Second Year</option>
+        <option value="TE">Third Year</option>
+        <option value="BE">Fourth Year</option>
+      </select>
+    </div>
+  </div>
+</div>
 
                 {/* Role Selection */}
                 <div className="space-y-1">

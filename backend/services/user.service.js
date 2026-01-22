@@ -9,6 +9,10 @@ class UserService {
                 id: true,
                 email: true,
                 role: true,
+                fullName: true,    // Added
+                prn: true,         // Added
+                badgeNumber: true, // Added
+                year: true,        // Added
                 createdAt: true
             }
         });

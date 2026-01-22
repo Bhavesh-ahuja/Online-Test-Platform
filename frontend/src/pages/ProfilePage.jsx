@@ -70,14 +70,41 @@ function ProfilePage() {
         My Profile
       </h1>
 
-      <div className="bg-white shadow-md rounded-lg p-6 border border-gray-200 space-y-4">
-        <div>
-          <p className="text-sm text-gray-500">Email</p>
-          <p className="text-lg font-medium text-gray-800">
-            {user.email}
-          </p>
-        </div>
+      
+<div className="bg-white shadow-md rounded-lg p-6 border border-gray-200 space-y-4">
+  <div>
+    <p className="text-sm text-gray-500">Full Name</p>
+    <p className="text-lg font-medium text-gray-800">
+      {user.fullName || "Not Set"}
+    </p>
+  </div>
 
+  <div>
+    <p className="text-sm text-gray-500">PRN / Badge Number</p>
+    <p className="text-lg font-medium text-gray-800">
+      {user.prn || "N/A"} / {user.badgeNumber || "N/A"}
+    </p>
+  </div>
+
+  <div>
+    <p className="text-sm text-gray-500">Year</p>
+    <p className="text-lg font-medium text-gray-800">
+      {user.year || "N/A"}
+    </p>
+  </div>
+
+  <div className="pt-2 border-t">
+    <p className="text-sm text-gray-500">Email (Authentication)</p>
+    <p className="text-md text-gray-600">
+      {user.email}
+    </p>
+  </div>
+
+  {/* Keep the Admin Badge and Logout button as they were */}
+</div>
+
+    
+     
         <div>
           <p className="text-sm text-gray-500">Role</p>
           <p className="text-lg font-medium text-gray-800">
@@ -104,8 +131,8 @@ function ProfilePage() {
             Logout
           </button>
         </div>
-      </div>
-    </div>
+      
+    </div>  
   );
 }
 

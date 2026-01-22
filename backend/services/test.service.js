@@ -278,7 +278,11 @@ class TestService {
             prisma.testSubmission.findMany({
                 where: { testId: parseInt(testId) },
                 include: {
-                    student: { select: { email: true, id: true } },
+                    student: { select: { fullName: true,    
+                    prn: true,         
+                    email: true,
+                    badgeNumber: true,
+                    year: true, id: true } },
                 },
                 orderBy: { score: 'desc' },
                 skip,
