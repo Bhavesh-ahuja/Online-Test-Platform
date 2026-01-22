@@ -51,6 +51,18 @@ function ProfilePage() {
     localStorage.removeItem("user");
     navigate("/login");
   };
+  // 1. Add this mapping helper inside your ProfilePage component
+const getFullYearName = (yearCode) => {
+  const years = {
+    'FE': 'First Year',
+    'SE': 'Second Year',
+    'TE': 'Third Year',
+    'BE': 'Fourth Year'
+  };
+  return years[yearCode] || yearCode; // Returns full name if code exists, otherwise returns original
+};
+
+
 
   if (loading) {
     return <div className="p-8 text-center">Loading profile...</div>;
@@ -87,11 +99,11 @@ function ProfilePage() {
   </div>
 
   <div>
-    <p className="text-sm text-gray-500">Year</p>
-    <p className="text-lg font-medium text-gray-800">
-      {user.year || "N/A"}
-    </p>
-  </div>
+  <p className="text-sm text-gray-500">Year</p>
+  <p className="text-lg font-medium text-gray-800">
+    {getFullYearName(user.year)}
+  </p>
+</div>
 
   <div className="pt-2 border-t">
     <p className="text-sm text-gray-500">Email (Authentication)</p>
