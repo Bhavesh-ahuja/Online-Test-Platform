@@ -58,11 +58,10 @@ class TestService {
   duration: parseInt(data.duration),
   scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
   scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
+  showResult: data.showResult,
   attemptType: data.attemptType,
   maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
-  ...(typeof data.showResult === 'boolean' && {
-    showResult: data.showResult
-  })
+  
 };
 
 
@@ -259,18 +258,26 @@ class TestService {
 
   // 6️⃣ Save results
   await prisma.$transaction([
-    prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
-    prisma.answer.createMany({ data: answerRecords }),
-    prisma.testSubmission.update({
-      where: { id: submission.id },
-      data: {
-        score,
-        status: ['TIMEOUT', 'TERMINATED'].includes(status)
-          ? status
-          : 'COMPLETED'
-      }
-    })
-  ]);
+  prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
+  prisma.answer.createMany({ data: answerRecords }),
+  prisma.testSubmission.update({
+    where: { id: submission.id },
+    data: {
+      score,
+      status: ['TIMEOUT', 'TERMINATED'].includes(status)
+        ? status
+        : 'COMPLETED',
+      canViewResult: canSeeResult   // ✅ THIS WAS MISSING
+    }
+  })
+]);
+
+
+  console.log('SUBMIT DEBUG →', {
+  submissionId: submission.id,
+  canSeeResult,
+});
+
 
   // 7️⃣ Return decision to frontend
  return {
@@ -282,6 +289,8 @@ class TestService {
 
 
     async getTestResult(submissionId, userId, role) {
+        
+
         const submission = await prisma.testSubmission.findUnique({
             where: { id: parseInt(submissionId) },
             include: {
@@ -297,8 +306,10 @@ class TestService {
         if (!submission || (submission.studentId !== userId && role !== 'ADMIN')) {
             throw new AppError('Submission not found or unauthorized', 404);
         }
-        if (role !== 'ADMIN' && !submission.test.showResult) {
-        throw new AppError('Results for this test are not available yet.', 403);
+        if (!submission.canViewResult) {
+  throw new AppError('Results for this test are not available yet.', 403);
+
+
     }
         return submission;
     }
@@ -428,15 +439,14 @@ class TestService {
         const { answers, markedQuestions } = data;
 
         await prisma.testSubmission.update({
-            where: { id: submissionId },
-            data: {
-                answersDraft: {
-                    answers,
-                    markedQuestions,
-                    updatedAt: new Date()
-                }
-            }
-        });
+  where: { id: submission.id },
+  data: {
+    score,
+    status: finalStatus,
+    canViewResult: canSeeResult // ✅ THIS LINE
+  }
+});
+
     }
 }
 

@@ -100,6 +100,7 @@ model TestSubmission {
 
   @@index([testId])
   @@index([studentId])
+  canViewResult Boolean @default(false)
 }
 
 model Answer {
