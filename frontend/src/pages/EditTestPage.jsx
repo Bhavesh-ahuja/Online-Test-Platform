@@ -17,7 +17,8 @@ function EditTestPage() {
     description: '',
     duration: 30,
     scheduledStart: '',
-    scheduledEnd: ''
+    scheduledEnd: '',
+    showResult: true
   });
 
   const [questions, setQuestions] = useState([]);
@@ -53,7 +54,8 @@ function EditTestPage() {
           description: data.description || '',
           duration: data.duration,
           scheduledStart: formatDate(data.scheduledStart),
-          scheduledEnd: formatDate(data.scheduledEnd)
+          scheduledEnd: formatDate(data.scheduledEnd),
+          showResult: data.showResult
         });
 
         // Load Attempt Config
@@ -74,10 +76,14 @@ function EditTestPage() {
   // --- Helpers ---
   const markDirty = () => setHasUnsavedChanges(true);
 
-  const handleTestChange = (e) => {
-    setTestData({ ...testData, [e.target.name]: e.target.value });
-    markDirty();
-  };
+ const handleTestChange = (e) => {
+  const { name, type, value, checked } = e.target;
+  setTestData({
+    ...testData,
+    [name]: type === 'checkbox' ? checked : value
+  });
+};
+
 
   const handleQuestionChange = (qi, field, value) => {
     const copy = [...questions];
@@ -181,6 +187,7 @@ function EditTestPage() {
           scheduledStart: localToUtc(testData.scheduledStart),
           scheduledEnd: localToUtc(testData.scheduledEnd),
           questions,
+          showResult: testData.showResult,
         }),
       });
 

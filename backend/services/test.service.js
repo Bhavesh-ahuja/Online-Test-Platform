@@ -53,15 +53,18 @@ class TestService {
 
         // 3. Prepare Update Data
         const updateData = {
-            title: data.title,
-            description: data.description,
-            duration: parseInt(data.duration),
-            showResult: data.showResult,
-            scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
-            scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
-            attemptType: data.attemptType,
-            maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
-        };
+  title: data.title,
+  description: data.description,
+  duration: parseInt(data.duration),
+  scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
+  scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
+  attemptType: data.attemptType,
+  maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
+  ...(typeof data.showResult === 'boolean' && {
+    showResult: data.showResult
+  })
+};
+
 
 
         // 4. Handle Questions Logic
@@ -282,7 +285,7 @@ class TestService {
         const submission = await prisma.testSubmission.findUnique({
             where: { id: parseInt(submissionId) },
             include: {
-                test: { select: { title: true, _count: { select: { questions: true } } } },
+                test: { select: { title: true,showResult: true, _count: { select: { questions: true } } } },
                 answers: {
                     include: {
                         question: { select: { text: true, options: true, correctAnswer: true } }
