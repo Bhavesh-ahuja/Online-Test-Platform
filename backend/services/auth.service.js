@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import AppError from '../utils/AppError.js';
 
 class AuthService {
-  async register(email, password, role) {
+  async register(email, password, role, firstName, lastName) {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       throw new AppError('Email already in use', 400);
@@ -14,11 +14,11 @@ class AuthService {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = await prisma.user.create({
-      data: { email, password: hashedPassword, role },
+      data: { email, password: hashedPassword, role, firstName, lastName },
+      select: { id: true, email: true, role: true, firstName: true, lastName: true }
     });
 
-    const { password: _, ...userWithoutPassword } = newUser;
-    return userWithoutPassword;
+    return newUser;
   }
 
   async login(email, password) {
@@ -35,7 +35,7 @@ class AuthService {
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
     );
 
     return {

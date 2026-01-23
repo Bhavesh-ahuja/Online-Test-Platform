@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config';
 
 export const testsApi = {
     getAll: async () => {
-        const res = await fetch(`${API_BASE_URL}/api/tests`);
+        const res = await authFetch('/api/tests');
         if (!res.ok) throw new Error('Failed to fetch tests');
         return res.json();
     },

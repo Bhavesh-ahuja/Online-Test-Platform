@@ -3,6 +3,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createExamSessionToken } from '../lib/examSessionToken.js';
 import AppError from '../utils/AppError.js';
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class TestService {
     async createTest(data, userId) {
@@ -204,7 +211,6 @@ class TestService {
         if (!userId) return tests;
 
         // 3. Fetch all submissions for this user (both standard and switch)
-        // Optimization: We could filter by the test IDs we just fetched if needed
         const submissions = await prisma.testSubmission.findMany({
             where: { studentId: userId },
             orderBy: { createdAt: 'desc' }
@@ -215,35 +221,40 @@ class TestService {
             orderBy: { createdAt: 'desc' }
         });
 
+        // OPTIMIZATION: Index submissions by testId to avoid O(N*M) filtering
+        const submissionsMap = {}; // { testId: [submissions] }
+        submissions.forEach(s => {
+            if (!submissionsMap[s.testId]) submissionsMap[s.testId] = [];
+            submissionsMap[s.testId].push(s);
+        });
+
+        const switchResultsMap = {}; // { testId: [results] }
+        switchResults.forEach(r => {
+            if (!switchResultsMap[r.testId]) switchResultsMap[r.testId] = [];
+            switchResultsMap[r.testId].push(r);
+        });
+
         // 4. Map status to tests
         return tests.map(test => {
             let userStatus = null;
             let attemptCount = 0;
-            let latestSubmission = null;
+
+            // Fast Lookup
+            const mySubmissions = submissionsMap[test.id] || [];
+            const mySwitchResults = switchResultsMap[test.id] || [];
+
+            attemptCount = mySubmissions.length;
 
             if (test.type === 'SWITCH') {
-                // For Switch, we look at SwitchChallengeResults AND TestSubmissions (since we wrap it)
-                // But primarily SwitchChallengeResult is the "score" record.
-                // However, the "session" logic uses TestSubmission 'IN_PROGRESS'.
-
-                const mySubmissions = submissions.filter(s => s.testId === test.id);
-                attemptCount = mySubmissions.length;
-
                 // Check for active session
                 const inProgress = mySubmissions.find(s => s.status === 'IN_PROGRESS');
-                const lastResult = switchResults.find(r => r.testId === test.id); // Latest switch result
+                const lastResult = mySwitchResults[0]; // Already sorted desc
 
-                // If we have an in-progress session, prioritize that
                 if (inProgress) {
                     userStatus = { status: 'IN_PROGRESS', submissionId: inProgress.id };
                 } else if (lastResult) {
-                    // If we have a result, we consider it 'COMPLETED' contextually
-                    // We need the submission ID that corresponds to this result if we want to view it?
-                    // Actually Switch Results are separate. We might just link to "My Results".
-                    // For simplicity, if we have a finished submission, we use that.
-
-                    // Find the completed submission corresponding to this? 
-                    // Or just use the latest completed submission
+                    // Find the completed submission corresponding to this result if possible
+                    // or just return completed status
                     const completed = mySubmissions.find(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status));
                     if (completed) {
                         userStatus = {
@@ -253,12 +264,8 @@ class TestService {
                         };
                     }
                 }
-
             } else {
                 // Standard Test
-                const mySubmissions = submissions.filter(s => s.testId === test.id);
-                attemptCount = mySubmissions.length;
-
                 const inProgress = mySubmissions.find(s => s.status === 'IN_PROGRESS');
                 const completed = mySubmissions.find(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status));
 
@@ -312,82 +319,83 @@ class TestService {
         const { answers, status, metrics, finalScore, testType } = body; // metrics/finalScore from Switch
         const { submissionId } = examSession;
 
-        const submission = await prisma.testSubmission.findUnique({
-            where: { id: submissionId },
-            include: { test: { select: { type: true } } }
-        });
+        return await prisma.$transaction(async (tx) => {
+            const submission = await tx.testSubmission.findUnique({
+                where: { id: submissionId },
+                include: { test: { select: { type: true } } }
+            });
 
-        if (!submission) throw new AppError('Submission not found', 404);
-        if (submission.status !== 'IN_PROGRESS') throw new AppError('Submission already finalized', 400);
-        if (examSession.status !== 'IN_PROGRESS') throw new AppError('Submission already closed', 400);
+            if (!submission) throw new AppError('Submission not found', 404);
+            if (submission.status !== 'IN_PROGRESS') throw new AppError('Submission already finalized', 400);
+            if (examSession.status !== 'IN_PROGRESS') throw new AppError('Submission already closed', 400);
 
-        // --- HANDLE SWITCH CHALLENGE ---
-        if (submission.test.type === 'SWITCH' || testType === 'SWITCH') {
-            // 1. Validate Metrics (Basic)
-            if (!metrics) throw new AppError('Missing performance metrics', 400);
+            let score = 0;
+            let newStatus = 'COMPLETED';
 
-            const score = finalScore || 0;
-            const accuracy = metrics.correct / (metrics.totalAttempts || 1);
+            // --- HANDLE SWITCH CHALLENGE ---
+            if (submission.test.type === 'SWITCH' || testType === 'SWITCH') {
+                if (!metrics) throw new AppError('Missing performance metrics', 400);
 
-            await prisma.$transaction([
-                // Create specialized result record
-                prisma.switchChallengeResult.create({
+                score = finalScore || 0;
+                newStatus = metrics.reason === 'TIMEOUT' ? 'TIMEOUT' : (metrics.reason === 'VIOLATION_LIMIT' ? 'TERMINATED' : 'COMPLETED');
+                const accuracy = metrics.correct / (metrics.totalAttempts || 1);
+
+                await tx.switchChallengeResult.create({
                     data: {
                         userId: submission.studentId,
                         testId: parseInt(id),
                         score: score,
                         accuracy: accuracy,
                         metrics: metrics,
-                        submissionId: submission.id // REQUIRED by schema
+                        submissionId: submission.id
                     }
-                }),
-                // Update main submission record for integrity
-                prisma.testSubmission.update({
-                    where: { id: submission.id },
-                    data: {
-                        score: score,
-                        status: metrics.reason === 'TIMEOUT' ? 'TIMEOUT' : (metrics.reason === 'VIOLATION_LIMIT' ? 'TERMINATED' : 'COMPLETED'),
-                    }
-                })
-            ]);
-            return { success: true, submissionId: submission.id };
-        }
+                });
+            } else {
+                // --- HANDLE STANDARD TEST ---
+                const correctQuestions = await tx.question.findMany({
+                    where: { testId: parseInt(id) },
+                    select: { id: true, correctAnswer: true },
+                });
 
-        // --- HANDLE STANDARD TEST ---
-        const correctQuestions = await prisma.question.findMany({
-            where: { testId: parseInt(id) },
-            select: { id: true, correctAnswer: true },
-        });
+                const answerRecords = [];
+                for (const q of correctQuestions) {
+                    const studentAnswer = answers?.[q.id];
+                    const isCorrect = studentAnswer === q.correctAnswer;
+                    if (isCorrect) score++;
 
-        let score = 0;
-        const answerRecords = [];
+                    answerRecords.push({
+                        selectedAnswer: studentAnswer || "No Answer",
+                        isCorrect: isCorrect,
+                        questionId: q.id,
+                        submissionId: submission.id,
+                    });
+                }
 
-        for (const q of correctQuestions) {
-            const studentAnswer = answers?.[q.id];
-            const isCorrect = studentAnswer === q.correctAnswer;
-            if (isCorrect) score++;
+                newStatus = ['TIMEOUT', 'TERMINATED'].includes(status) ? status : 'COMPLETED';
 
-            answerRecords.push({
-                selectedAnswer: studentAnswer || "No Answer",
-                isCorrect: isCorrect,
-                questionId: q.id,
-                submissionId: submission.id,
-            });
-        }
+                await tx.answer.deleteMany({ where: { submissionId: submission.id } });
+                await tx.answer.createMany({ data: answerRecords });
+            }
 
-        await prisma.$transaction([
-            prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
-            prisma.answer.createMany({ data: answerRecords }),
-            prisma.testSubmission.update({
-                where: { id: submission.id },
+            // --- ATOMIC FINALIZATION ---
+            // Only update if status is STILL 'IN_PROGRESS'
+            const result = await tx.testSubmission.updateMany({
+                where: {
+                    id: submission.id,
+                    status: 'IN_PROGRESS'
+                },
                 data: {
                     score,
-                    status: ['TIMEOUT', 'TERMINATED'].includes(status) ? status : 'COMPLETED',
-                },
-            }),
-        ]);
+                    status: newStatus,
+                }
+            });
 
-        return { success: true, submissionId: submission.id };
+            if (result.count === 0) {
+                throw new AppError('Submission race condition detected - already finalized', 409);
+            }
+
+            return { success: true, submissionId: submission.id };
+        });
     }
 
     async getTestResult(submissionId, userId, role) {
@@ -441,8 +449,18 @@ class TestService {
         return all;
     }
 
-    async getTestSubmissions(testId, page = 1, limit = 10) {
+    async getTestSubmissions(testId, page = 1, limit = 10, sortBy = 'score', order = 'desc') {
         const skip = (page - 1) * limit;
+
+        // Map frontend sort keys to Prisma fields
+        let orderBy = {};
+        if (sortBy === 'email') {
+            orderBy = { student: { email: order } };
+        } else if (sortBy === 'date') {
+            orderBy = { createdAt: order };
+        } else {
+            orderBy = { score: order }; // Default
+        }
 
         const [total, submissions] = await prisma.$transaction([
             prisma.testSubmission.count({ where: { testId: parseInt(testId) } }),
@@ -451,7 +469,7 @@ class TestService {
                 include: {
                     student: { select: { email: true, id: true } },
                 },
-                orderBy: { score: 'desc' },
+                orderBy: orderBy,
                 skip,
                 take: limit
             })
@@ -545,6 +563,98 @@ class TestService {
         } catch (parseError) {
             throw new AppError("AI failed to format the questions correctly. Please try a cleaner PDF.", 500);
         }
+    }
+
+    async exportTestResultsPDF(testId) {
+        // 1. Fetch Data (All Submissions, No Pagination)
+        const test = await prisma.test.findUnique({ where: { id: parseInt(testId) } });
+        if (!test) throw new AppError('Test not found', 404);
+
+        const submissions = await prisma.testSubmission.findMany({
+            where: { testId: parseInt(testId) },
+            include: {
+                student: { select: { email: true, firstName: true, lastName: true } }
+            },
+            orderBy: { score: 'desc' }
+        });
+
+        // 2. Setup PDF Doc
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+        // 3. Watermark (Team Logo)
+        // Path relative to backend/services -> frontend/public/img/logo.png
+        // backend/services/../../frontend/public/img/logo.png
+        const logoPath = path.join(__dirname, '../../frontend/public/img/logo.png');
+
+        if (fs.existsSync(logoPath)) {
+            // Add Logo as Watermark (Centered, Faded)
+            const pageWidth = doc.page.width;
+            const pageHeight = doc.page.height;
+            doc.image(logoPath, pageWidth / 2 - 100, pageHeight / 2 - 100, {
+                width: 200,
+                opacity: 0.1
+            });
+        }
+
+        // 4. Header
+        doc.fontSize(20).text('Class Result Report', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(14).text(`Test: ${test.title}`, { align: 'center' });
+        doc.fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center', color: 'gray' });
+        doc.moveDown(2);
+
+        // 5. Table Header
+        const startY = doc.y;
+        const colX = [50, 200, 350, 450]; // X positions for columns
+
+        doc.fontSize(10).font('Helvetica-Bold');
+        doc.text('Student Name', colX[0], startY);
+        doc.text('Email', colX[1], startY);
+        doc.text('Status', colX[2], startY);
+        doc.text('Score', colX[3], startY);
+
+        doc.moveTo(50, startY + 15).lineTo(550, startY + 15).stroke();
+        doc.moveDown();
+
+        // 6. Table Rows
+        doc.font('Helvetica');
+        let currentY = doc.y + 10;
+
+        submissions.forEach((sub, index) => {
+            // Page Break Check
+            if (currentY > 750) {
+                doc.addPage();
+                // Re-add Watermark on new page
+                if (fs.existsSync(logoPath)) {
+                    doc.image(logoPath, doc.page.width / 2 - 100, doc.page.height / 2 - 100, { width: 200, opacity: 0.1 });
+                }
+                currentY = 50;
+            }
+
+            const fullName = `${sub.student.firstName || ''} ${sub.student.lastName || ''}`.trim() || 'N/A';
+
+            doc.text(fullName, colX[0], currentY, { width: 140, ellipsis: true });
+            doc.text(sub.student.email, colX[1], currentY, { width: 140, ellipsis: true });
+
+            // Status Color Logic (Simple text for PDF)
+            doc.fillColor(sub.status === 'TERMINATED' ? 'red' : 'black');
+            doc.text(sub.status, colX[2], currentY);
+            doc.fillColor('black');
+
+            doc.text(sub.score.toString(), colX[3], currentY);
+
+            currentY += 20;
+        });
+
+        // 7. Footer
+        const totalStudents = submissions.length;
+        const avgScore = totalStudents > 0 ? (submissions.reduce((acc, curr) => acc + curr.score, 0) / totalStudents).toFixed(1) : 0;
+
+        doc.moveDown(2);
+        doc.font('Helvetica-Bold').text(`Total Students: ${totalStudents}   |   Average Score: ${avgScore}`, { align: 'right' });
+
+        doc.end();
+        return doc;
     }
 
     async autosaveTestProgress(examSession, data) {

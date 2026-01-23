@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../../config'; // ✅ FROM 1st VERSION
 import Modal from '../components/Modal';
 import { authFetch } from "../utils/authFetch";
+import { testsApi } from '../api/tests';
 
 function DashboardPage() {
   const [tests, setTests] = useState([]);
@@ -19,16 +19,11 @@ function DashboardPage() {
 
   // 1. Fetch Tests
   const fetchTests = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return navigate('/login');
+    // If we're not logged in, redirection might happen by authFetch or we check here
+    if (!localStorage.getItem('token')) return navigate('/login');
 
     try {
-      const response = await authFetch("/api/tests");
-
-
-      if (!response.ok) throw new Error('Failed to fetch tests');
-
-      const data = await response.json();
+      const data = await testsApi.getAll();
       setTests(data);
     } catch (err) {
       setError(err.message);
