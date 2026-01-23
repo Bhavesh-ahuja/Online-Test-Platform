@@ -20,6 +20,7 @@ class TestService {
                 title,
                 description,
                 duration: parseInt(duration),
+                showResult: data.showResult ?? true,
                 scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
                 scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
                 createdById: userId,
@@ -55,6 +56,7 @@ class TestService {
             title: data.title,
             description: data.description,
             duration: parseInt(data.duration),
+            showResult: data.showResult,
             scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
             scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
             attemptType: data.attemptType,
@@ -193,53 +195,88 @@ class TestService {
     }
 
     async submitTest(params, body, examSession) {
-        if (!examSession) throw new AppError('Invalid or expired exam session', 401);
+  if (!examSession) {
+    throw new AppError('Invalid or expired exam session', 401);
+  }
 
-        const { id } = params;
-        const { answers, status } = body;
-        const { submissionId } = examSession;
+  const { id } = params;
+  const { answers, status } = body;
+  const { submissionId } = examSession;
 
-        const submission = await prisma.testSubmission.findUnique({ where: { id: submissionId } });
-        if (!submission) throw new AppError('Submission not found', 404);
-        if (submission.status !== 'IN_PROGRESS') throw new AppError('Submission already finalized', 400);
-        if (examSession.status !== 'IN_PROGRESS') throw new AppError('Submission already closed', 400);
+  // 1️⃣ Fetch submission FIRST
+  const submission = await prisma.testSubmission.findUnique({
+    where: { id: submissionId }
+  });
 
-        const correctQuestions = await prisma.question.findMany({
-            where: { testId: parseInt(id) },
-            select: { id: true, correctAnswer: true },
-        });
+  if (!submission) throw new AppError('Submission not found', 404);
+  if (submission.status !== 'IN_PROGRESS') {
+    throw new AppError('Submission already finalized', 400);
+  }
 
-        let score = 0;
-        const answerRecords = [];
+  // 2️⃣ Fetch test config SECOND
+  const testConfig = await prisma.test.findUnique({
+    where: { id: parseInt(id) },
+    select: { showResult: true }
+  });
 
-        for (const q of correctQuestions) {
-            const studentAnswer = answers?.[q.id];
-            const isCorrect = studentAnswer === q.correctAnswer;
-            if (isCorrect) score++;
+  // 3️⃣ Fetch user role THIRD
+  const user = await prisma.user.findUnique({
+    where: { id: submission.studentId },
+    select: { role: true }
+  });
 
-            answerRecords.push({
-                selectedAnswer: studentAnswer || "No Answer",
-                isCorrect: isCorrect,
-                questionId: q.id,
-                submissionId: submission.id,
-            });
-        }
+  if (!user) throw new AppError('User not found', 404);
 
-        await prisma.$transaction([
-            prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
-            prisma.answer.createMany({ data: answerRecords }),
-            prisma.testSubmission.update({
-                where: { id: submission.id },
-                data: {
-                    score,
-                    status: ['TIMEOUT', 'TERMINATED'].includes(status) ? status : 'COMPLETED',
-                },
-            }),
-        ]);
+  // 4️⃣ Decide result visibility
+  const canSeeResult =
+  user.role === 'ADMIN'
+    ? true
+    : Boolean(testConfig?.showResult);
 
-        return { success: true, submissionId: submission.id };
+  const questions = await prisma.question.findMany({
+    where: { testId: parseInt(id) },
+    select: { id: true, correctAnswer: true }
+  });
 
-    }
+  let score = 0;
+  const answerRecords = [];
+
+  for (const q of questions) {
+    const studentAnswer = answers?.[q.id];
+    const isCorrect = studentAnswer === q.correctAnswer;
+    if (isCorrect) score++;
+
+    answerRecords.push({
+      selectedAnswer: studentAnswer || 'No Answer',
+      isCorrect,
+      questionId: q.id,
+      submissionId: submission.id
+    });
+  }
+
+  // 6️⃣ Save results
+  await prisma.$transaction([
+    prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
+    prisma.answer.createMany({ data: answerRecords }),
+    prisma.testSubmission.update({
+      where: { id: submission.id },
+      data: {
+        score,
+        status: ['TIMEOUT', 'TERMINATED'].includes(status)
+          ? status
+          : 'COMPLETED'
+      }
+    })
+  ]);
+
+  // 7️⃣ Return decision to frontend
+ return {
+  success: true,
+  submissionId: submission.id,
+  showResult: canSeeResult
+};
+}
+
 
     async getTestResult(submissionId, userId, role) {
         const submission = await prisma.testSubmission.findUnique({
@@ -257,6 +294,9 @@ class TestService {
         if (!submission || (submission.studentId !== userId && role !== 'ADMIN')) {
             throw new AppError('Submission not found or unauthorized', 404);
         }
+        if (role !== 'ADMIN' && !submission.test.showResult) {
+        throw new AppError('Results for this test are not available yet.', 403);
+    }
         return submission;
     }
 

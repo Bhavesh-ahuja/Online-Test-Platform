@@ -16,11 +16,17 @@ function ResultsPage() {
         navigate('/login');
         return;
       }
+      
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/tests/results/${submissionId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (response.status === 403) {
+  navigate('/test-submitted', { replace: true });
+  return;
+}
+
 
         if (response.status === 404) throw new Error('Results not found');
         if (!response.ok) throw new Error('Failed to fetch results');

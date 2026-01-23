@@ -325,6 +325,18 @@ function EditTestPage() {
               </button>
             )}
           </div>
+          <div className="flex items-center gap-2 mt-4">
+  <input
+    type="checkbox"
+    id="showResult"
+    className="w-4 h-4 accent-blue-600"
+    checked={testData.showResult}
+    onChange={(e) => setTestData({ ...testData, showResult: e.target.checked })}
+  />
+  <label htmlFor="showResult" className="text-sm font-medium text-gray-700">
+    Show result immediately after submission
+  </label>
+</div>
         </div>
 
         {/* --- QUESTIONS SECTION --- */}

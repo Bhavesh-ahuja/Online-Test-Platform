@@ -63,6 +63,7 @@ router.get(
   isAdmin,
   getTestByIdForAdmin
 );
+router.get('/results/:submissionId', authenticateToken, getTestResult);
 
 // GET /api/tests/:id - Get test details by ID
 router.get('/:id', authenticateExamSession, getTestById);
@@ -89,6 +90,7 @@ router.post('/:id/submit', authenticateExamSession, submitTest);
 router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
 
 // GET /api/tests/results/:submissionId - Get test result
-router.get('/results/:submissionId', authenticateToken, getTestResult);
+
+
 
 export default router;

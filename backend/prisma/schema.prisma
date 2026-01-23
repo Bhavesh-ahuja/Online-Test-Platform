@@ -54,7 +54,8 @@ model Test {
   scheduledEnd   DateTime?
   createdAt      DateTime  @default(now())
 
-  // New Features
+  showResult     Boolean   @default(true)
+
   attemptType AttemptType @default(ONCE)
   maxAttempts Int?
 
