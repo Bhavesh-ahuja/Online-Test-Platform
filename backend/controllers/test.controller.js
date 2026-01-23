@@ -49,7 +49,13 @@ export const getTestByIdForAdmin = catchAsync(async (req, res) => {
 
 
 export const submitTest = catchAsync(async (req, res) => {
-  const result = await TestService.submitTest(req.params, req.body, req.examSession);
+  // Ensure we have the student ID
+  const submissionData = {
+    ...req.body,
+    studentId: req.user?.userId || req.body.studentId
+  };
+
+  const result = await TestService.submitTest(req.params, submissionData, req.examSession);
   return res.json(result);
 });
 

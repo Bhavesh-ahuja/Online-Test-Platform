@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.routes.js';
 import testRoutes from './routes/test.routes.js';
 import userRoutes from './routes/user.routes.js';
+import healthRoutes from './routes/health.routes.js';
 
 // Initialize dotenv to load .env variables
 dotenv.config();
