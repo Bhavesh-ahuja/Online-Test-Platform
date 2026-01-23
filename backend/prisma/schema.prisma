@@ -34,6 +34,9 @@ model User {
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  firstName String @default("")
+  lastName  String @default("")
 
   // Relation: One user can create many tests
   tests     Test[]

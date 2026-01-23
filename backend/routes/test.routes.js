@@ -11,6 +11,7 @@ import {
   deleteTest,
   uploadTestPDF,
   startTest,
+  exportTestResultsPDF,
   autosaveTestProgress,
 } from '../controllers/test.controller.js';
 import multer from "multer";
@@ -24,7 +25,10 @@ const router = express.Router();
 
 // --- MULTER CONFIGURATION (Memory Storage) ---
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB Limit
+});
 
 /**
  * ============================
@@ -87,6 +91,12 @@ router.post('/:id/submit', authenticateExamSession, submitTest);
 
 // GET /api/tests/:id/submissions - Admin only: Get all submissions for a test
 router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
+
+// GET /api/tests/:id/submissions - Admin only: Get all submissions for a test
+router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
+
+// GET /api/tests/:id/export-pdf - Download Full Class Report
+router.get('/:id/export-pdf', authenticateToken, isAdmin, exportTestResultsPDF);
 
 // GET /api/tests/results/:submissionId - Get test result
 router.get('/results/:submissionId', authenticateToken, getTestResult);

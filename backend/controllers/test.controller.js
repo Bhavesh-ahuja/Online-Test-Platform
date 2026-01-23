@@ -29,7 +29,8 @@ export const startTest = catchAsync(async (req, res) => {
 
 // Get all tests
 export const getAllTests = catchAsync(async (req, res) => {
-  const tests = await TestService.getAllTests();
+  const userId = req.user?.userId;
+  const tests = await TestService.getAllTests(userId);
   res.json(tests);
 });
 
@@ -80,8 +81,10 @@ export const getTestSubmissions = catchAsync(async (req, res) => {
   const { id } = req.params; // Test ID
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
+  const sortBy = req.query.sortBy || 'score';
+  const order = req.query.order || 'desc';
 
-  const result = await TestService.getTestSubmissions(id, page, limit);
+  const result = await TestService.getTestSubmissions(id, page, limit, sortBy, order);
   res.json(result);
 });
 
@@ -95,6 +98,19 @@ export const deleteTest = catchAsync(async (req, res) => {
 export const uploadTestPDF = catchAsync(async (req, res) => {
   const result = await TestService.uploadTestPDF(req.file);
   res.json(result);
+});
+
+// Export Test Results (PDF)
+export const exportTestResultsPDF = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const pdfStream = await TestService.exportTestResultsPDF(id);
+
+  // Set Headers for Download
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Test_${id}_Report.pdf"`);
+
+  // Stream directly to response
+  pdfStream.pipe(res);
 });
 
 export const autosaveTestProgress = catchAsync(async (req, res) => {
