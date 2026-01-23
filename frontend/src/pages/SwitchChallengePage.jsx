@@ -4,132 +4,78 @@ import { useAuth } from '../context/AuthContext';
 import { authFetch } from '../utils/authFetch';
 import { API_BASE_URL } from '../../config';
 import Modal from '../components/Modal';
+import { useSwitchGame } from '../hooks/useSwitchGame';
+import { useKeyboardLock } from '../hooks/useKeyboardLock';
 
-// ==========================================
-// CONFIG & CONSTANTS
-// ==========================================
-const SYMBOLS = ['●', '▲', '■', '★']; // Simple Unicode shapes
 const MAX_WARNINGS = 3;
 
-// Difficulty Config
-const LEVELS = {
-    1: { depth: 1, distractors: 0 },
-    2: { depth: 1, distractors: 1 },
-    3: { depth: 2, distractors: 0 },
-    4: { depth: 2, distractors: 1 },
-    5: { depth: 3, distractors: 2 }
-};
-
-// ==========================================
-// UTILS: LOGIC ENGINE
-// ==========================================
-const applyOperator = (source, opString) => {
-    const indices = opString.split('').map(c => parseInt(c) - 1);
-    return indices.map(i => source[i]);
-};
-
-const generateRandomOperator = () => {
-    const nums = [1, 2, 3, 4];
-    for (let i = nums.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [nums[i], nums[j]] = [nums[j], nums[i]];
-    }
-    return nums.join('');
-};
-
-const generateOptions = (correctOp) => {
-    const options = new Set([correctOp]);
-    while (options.size < 4) {
-        options.add(generateRandomOperator());
-    }
-    return Array.from(options).sort(() => Math.random() - 0.5);
-};
-
-// ==========================================
-// COMPONENT
-// ==========================================
 export default function SwitchChallengePage() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user } = useAuth(); // kept for potential use or context requirement
 
-    // --- STATE ---
-    const [level, setLevel] = useState(1);
-    const [streak, setStreak] = useState(0);
-    const [score, setScore] = useState(0);
+    // --- SECURITY ---
+    // Only lock when game has actually started and we aren't showing the result modal
+
+
+    // --- GAME HOOK ---
+    const {
+        level,
+        streak,
+        score,
+        gameData,
+        isGameOver,
+        metricsRef,
+        handleOptionSelect,
+        startGame,
+        endGame
+    } = useSwitchGame();
+
+    // --- PAGE STATE ---
     const [timeLeft, setTimeLeft] = useState(null); // Null means "loading" / "not started"
-    const [hasStarted, setHasStarted] = useState(false); // NEW: Start Gate
-
-    const [gameData, setGameData] = useState(null);
+    const [hasStarted, setHasStarted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [gameOver, setGameOver] = useState(false);
 
+    // --- SECURITY ---
+    // Only lock when game has actually started and we aren't showing the result modal
+
+
+    // Proctoring State
     const [warningCount, setWarningCount] = useState(0);
     const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
 
-    // NEW: Submission Modal State
+    // Modal State
     const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
     const [submissionReason, setSubmissionReason] = useState(null);
 
-    // Session Token for submission
+    // --- AGGRESSIVE DEBUG LOCK & FOCUS TRACKING ---
+
+
+
+
+    // --- SECURITY ---
+    // Only lock when game has actually started and we aren't showing the result modal
+    // --- SECURITY ---
+    // Aggressive logic is now inside useKeyboardLock
+    useKeyboardLock(hasStarted && !isSubmissionModalOpen, addWarning);
+
+    // Refs
     const examSessionTokenRef = useRef(null);
 
-    // Metrics
-    const metricsRef = useRef({
-        totalAttempts: 0,
-        correct: 0,
-        reactionTimes: [],
-        maxLevel: 1,
-        violations: 0
-    });
-
-    const questionStartTime = useRef(Date.now());
-
-    // --- LOGIC FUNCTIONS (Hoisted) ---
-    const generateLevelData = useCallback((lvl) => {
-        const config = LEVELS[lvl] || LEVELS[5];
-        const source = [...SYMBOLS].sort(() => Math.random() - 0.5);
-        let currentSymbols = [...source];
-        let preOps = [];
-
-        if (config.depth > 1) {
-            const op1 = generateRandomOperator();
-            currentSymbols = applyOperator(currentSymbols, op1);
-            preOps.push(op1);
-        }
-        if (config.depth > 2) {
-            const op2 = generateRandomOperator();
-            currentSymbols = applyOperator(currentSymbols, op2);
-            preOps.push(op2);
-        }
-
-        const correctOp = generateRandomOperator();
-        const target = applyOperator(currentSymbols, correctOp);
-
-        setGameData({
-            source,
-            target,
-            preOps,
-            correctOp,
-            options: generateOptions(correctOp),
-            hasDistractors: config.distractors > 0
-        });
-
-        questionStartTime.current = Date.now();
-    }, []);
-
-    // --- SUBMISSION ---
+    // --- SUBMISSION LOGIC ---
     const handleGameOver = useCallback(async (reason) => {
         if (submitting) return;
-        setGameOver(true);
+        endGame(); // Stop game logic
         setSubmitting(true);
-        setSubmissionReason(reason); // Store reason for modal
+        setSubmissionReason(reason);
 
-        const currentMetrics = metricsRef.current;
+        // Simulated jitter
         const jitter = Math.floor(Math.random() * 2000);
         await new Promise(r => setTimeout(r, jitter));
 
+        // Finalize Metrics
+        const currentMetrics = metricsRef.current;
         const finalMetrics = {
             totalAttempts: currentMetrics.totalAttempts,
             correct: currentMetrics.correct,
@@ -148,19 +94,20 @@ export default function SwitchChallengePage() {
         };
 
         try {
-            // Must use fetch directly to override Authorization header with Exam Session Token
+            // UPDATED: Using fetch with explicit Authorization header for Exam Session Token
+            // authFetch is for User Token, here we need the specific Exam Session Token
             const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${examSessionTokenRef.current}` // Critical Fix
+                    'Authorization': `Bearer ${examSessionTokenRef.current}`
                 },
                 body: JSON.stringify(payload)
             });
 
             if (response.ok) {
-                setSubmitting(false); // Stop spinner
-                setIsSubmissionModalOpen(true); // Show Success Modal
+                setSubmitting(false);
+                setIsSubmissionModalOpen(true);
             } else {
                 const err = await response.json();
                 console.error("Submission failed", err);
@@ -172,15 +119,15 @@ export default function SwitchChallengePage() {
             alert("Network error. Please check connection and try again.");
             setSubmitting(false);
         }
-    }, [score, id, submitting]); // removed user & navigate dependency
+    }, [submitting, endGame, score, id, metricsRef]);
 
-    // --- DATA FETCHING & INIT ---
+    // --- INIT & CONFIG ---
     useEffect(() => {
         let mounted = true;
 
         const initGame = async () => {
             try {
-                // 1. Start Test Session (User Token) -> Get Exam Token
+                // 1. Start Test Session (User Token needed)
                 const startRes = await authFetch(`/api/tests/${id}/start`, { method: 'POST' });
                 if (!startRes.ok) {
                     const err = await startRes.json();
@@ -191,8 +138,7 @@ export default function SwitchChallengePage() {
 
                 if (!mounted) return;
 
-                // 2. Fetch Config (Session Token)
-                // Use fetch directly with Exam Session Token
+                // 2. Fetch Config (Exam Session Token needed)
                 const configRes = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
                     headers: { 'Authorization': `Bearer ${startData.examSessionToken}` }
                 });
@@ -200,11 +146,9 @@ export default function SwitchChallengePage() {
                 if (!configRes.ok) throw new Error('Failed to load test config');
                 const data = await configRes.json();
 
-                // 3. Setup Timer & Game
+                // 3. Setup Timer
                 const totalSeconds = data.switchConfig?.durationSeconds || (data.duration * 60) || 360;
-
                 setTimeLeft(totalSeconds);
-                generateLevelData(1);
                 setLoading(false);
 
             } catch (err) {
@@ -218,60 +162,13 @@ export default function SwitchChallengePage() {
 
         initGame();
         return () => { mounted = false; };
-    }, [id, navigate, generateLevelData]);
+    }, [id, navigate]);
 
-
-    // --- GAMEPLAY INTERACTION ---
-    const handleOptionSelect = (selectedOp) => {
-        if (gameOver) return;
-
-        const reactionTime = Date.now() - questionStartTime.current;
-        metricsRef.current.reactionTimes.push(reactionTime);
-        metricsRef.current.totalAttempts++;
-
-        const isCorrect = selectedOp === gameData.correctOp;
-
-        if (isCorrect) {
-            const newStreak = streak + 1;
-            setStreak(newStreak);
-            metricsRef.current.correct++;
-
-            let multiplier = 1.0;
-            if (newStreak >= 8) multiplier = 2.5;
-            else if (newStreak >= 5) multiplier = 2.0;
-            else if (newStreak >= 3) multiplier = 1.5;
-
-            let speedBonus = 0;
-            if (reactionTime < 2000) {
-                speedBonus = 0.5 * level;
-            }
-
-            setScore(prev => prev + (level * multiplier) + speedBonus);
-
-            let newLevel = level;
-            if (newStreak % 5 === 0 && level < 5) {
-                newLevel = level + 1;
-            }
-
-            if (newLevel > metricsRef.current.maxLevel) {
-                metricsRef.current.maxLevel = newLevel;
-            }
-
-            setLevel(newLevel);
-            generateLevelData(newLevel);
-        } else {
-            setScore(prev => Math.max(0, prev - level));
-            setStreak(0);
-            const newLevel = Math.max(1, level - 1);
-            setLevel(newLevel);
-            generateLevelData(newLevel);
-        }
-    };
-
+    // --- GAME CONTROL ---
     const handleStartGame = () => {
         setHasStarted(true);
         handleFixFullScreen();
-        questionStartTime.current = Date.now(); // reset timing
+        startGame(); // triggers hook reset
     };
 
     // --- PROCTORING ---
@@ -281,63 +178,63 @@ export default function SwitchChallengePage() {
             metricsRef.current.violations = newCount;
             return newCount;
         });
-    }, []);
+    }, [metricsRef]);
 
-    // Monitor Violations
     useEffect(() => {
-        if (warningCount >= MAX_WARNINGS && !gameOver && !submitting) {
+        if (warningCount >= MAX_WARNINGS && !isGameOver && !submitting) {
             handleGameOver('VIOLATION_LIMIT');
         }
-    }, [warningCount, gameOver, submitting, handleGameOver]);
+    }, [warningCount, isGameOver, submitting, handleGameOver]);
 
     const handleFixFullScreen = async () => {
-        if (document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
+        try {
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+        } catch (e) {
+            console.warn("Fullscreen request failed", e);
         }
         setIsFullScreenModalOpen(false);
     };
 
     // --- TIMERS & LISTENERS ---
-
-    // Timer
     useEffect(() => {
-        // Critical: Guard against null (loading) state OR hasn't started
         if (timeLeft === null || !hasStarted) return;
 
-        if (timeLeft <= 0 && !gameOver) {
+        if (timeLeft <= 0 && !isGameOver) {
             handleGameOver('TIMEOUT');
             return;
         }
-        if (!gameOver && timeLeft > 0) {
+        if (!isGameOver && timeLeft > 0) {
             const timer = setInterval(() => {
                 setTimeLeft(prev => Math.max(0, prev - 1));
             }, 1000);
             return () => clearInterval(timer);
         }
-    }, [timeLeft, gameOver, handleGameOver, hasStarted]);
+    }, [timeLeft, isGameOver, handleGameOver, hasStarted]);
 
     // Visibility
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.hidden && !gameOver && hasStarted) {
+            if (document.hidden && !isGameOver && hasStarted) {
                 addWarning();
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [gameOver, addWarning, hasStarted]);
+    }, [isGameOver, addWarning, hasStarted]);
 
-    // Full Screen (Optional: can comment out for dev)
+    // Full Screen
     useEffect(() => {
         const handleFullScreenChange = () => {
-            if (!document.fullscreenElement && !gameOver && !submitting && hasStarted) {
+            if (!document.fullscreenElement && !isGameOver && !submitting && hasStarted) {
                 addWarning();
                 setIsFullScreenModalOpen(true);
             }
         };
         document.addEventListener('fullscreenchange', handleFullScreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
-    }, [gameOver, submitting, addWarning, hasStarted]);
+    }, [isGameOver, submitting, addWarning, hasStarted]);
 
     // No Copy/Paste
     useEffect(() => {
@@ -352,13 +249,13 @@ export default function SwitchChallengePage() {
         };
     }, []);
 
-    // --- RENDER ---
+    // --- UTILS ---
     const getSymbolColor = (symbol) => {
         switch (symbol) {
-            case '●': return 'text-blue-500';   // Circle -> Blue
-            case '★': return 'text-purple-500'; // Star -> Purple
-            case '■': return 'text-red-500';    // Square -> Red
-            case '▲': return 'text-yellow-500'; // Triangle -> Yellow
+            case '●': return 'text-blue-500';
+            case '★': return 'text-purple-500';
+            case '■': return 'text-red-500';
+            case '▲': return 'text-yellow-500';
             default: return 'text-gray-700';
         }
     };
@@ -403,7 +300,7 @@ export default function SwitchChallengePage() {
             </div>
 
             {/* GAME AREA */}
-            {!hasStarted ? (
+            {!hasStarted || !gameData ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
                     <div className="bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all max-w-lg w-full border border-gray-100">
                         <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -473,7 +370,7 @@ export default function SwitchChallengePage() {
                             <button
                                 key={idx}
                                 onClick={() => handleOptionSelect(op)}
-                                disabled={submitting || gameOver}
+                                disabled={submitting || isGameOver}
                                 className="py-4 bg-white border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-md transition-all text-xl font-mono font-bold text-gray-700 active:scale-95"
                             >
                                 {op}

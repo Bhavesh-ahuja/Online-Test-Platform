@@ -34,7 +34,7 @@ function AppRoutes() {
       <Route path="/tests/:id/admin-results" element={<MainLayout><AdminResultsPage /></MainLayout>} />
       <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
       <Route path="/test/:id/instructions" element={<MainLayout><TestInstructions /></MainLayout>} />
-      <Route path="/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
+      <Route path="/test/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
       <Route path="/my-results" element={<MainLayout><MyResultsPage /></MainLayout>} />
 
       {/* Exam Route (Wrapped in ExamLayout) */}

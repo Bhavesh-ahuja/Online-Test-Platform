@@ -73,7 +73,7 @@ function MyResultsPage() {
                                         )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <Link to={`/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">
+                                        <Link to={`/test/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">
                                             View Details
                                         </Link>
                                     </td>

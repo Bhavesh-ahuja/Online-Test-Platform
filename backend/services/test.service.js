@@ -191,14 +191,96 @@ class TestService {
         });
     }
 
-    async getAllTests() {
-        return await prisma.test.findMany({
+    async getAllTests(userId) {
+        // 1. Fetch all tests
+        const tests = await prisma.test.findMany({
             include: {
                 createdBy: { select: { email: true } },
                 _count: { select: { questions: true } }
             }
         });
+
+        // 2. If no user, return raw tests (or empty array if strict)
+        if (!userId) return tests;
+
+        // 3. Fetch all submissions for this user (both standard and switch)
+        // Optimization: We could filter by the test IDs we just fetched if needed
+        const submissions = await prisma.testSubmission.findMany({
+            where: { studentId: userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const switchResults = await prisma.switchChallengeResult.findMany({
+            where: { userId: userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // 4. Map status to tests
+        return tests.map(test => {
+            let userStatus = null;
+            let attemptCount = 0;
+            let latestSubmission = null;
+
+            if (test.type === 'SWITCH') {
+                // For Switch, we look at SwitchChallengeResults AND TestSubmissions (since we wrap it)
+                // But primarily SwitchChallengeResult is the "score" record.
+                // However, the "session" logic uses TestSubmission 'IN_PROGRESS'.
+
+                const mySubmissions = submissions.filter(s => s.testId === test.id);
+                attemptCount = mySubmissions.length;
+
+                // Check for active session
+                const inProgress = mySubmissions.find(s => s.status === 'IN_PROGRESS');
+                const lastResult = switchResults.find(r => r.testId === test.id); // Latest switch result
+
+                // If we have an in-progress session, prioritize that
+                if (inProgress) {
+                    userStatus = { status: 'IN_PROGRESS', submissionId: inProgress.id };
+                } else if (lastResult) {
+                    // If we have a result, we consider it 'COMPLETED' contextually
+                    // We need the submission ID that corresponds to this result if we want to view it?
+                    // Actually Switch Results are separate. We might just link to "My Results".
+                    // For simplicity, if we have a finished submission, we use that.
+
+                    // Find the completed submission corresponding to this? 
+                    // Or just use the latest completed submission
+                    const completed = mySubmissions.find(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status));
+                    if (completed) {
+                        userStatus = {
+                            status: completed.status,
+                            submissionId: completed.id,
+                            score: completed.score
+                        };
+                    }
+                }
+
+            } else {
+                // Standard Test
+                const mySubmissions = submissions.filter(s => s.testId === test.id);
+                attemptCount = mySubmissions.length;
+
+                const inProgress = mySubmissions.find(s => s.status === 'IN_PROGRESS');
+                const completed = mySubmissions.find(s => ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(s.status));
+
+                if (inProgress) {
+                    userStatus = { status: 'IN_PROGRESS', submissionId: inProgress.id };
+                } else if (completed) {
+                    userStatus = {
+                        status: completed.status,
+                        submissionId: completed.id,
+                        score: completed.score
+                    };
+                }
+            }
+
+            return {
+                ...test,
+                userStatus,
+                attemptCount
+            };
+        });
     }
+
 
     async getTestById(id, includeAnswers = false) {
         const test = await prisma.test.findUnique({
