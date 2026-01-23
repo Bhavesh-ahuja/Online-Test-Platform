@@ -6,7 +6,18 @@ import AppError from '../utils/AppError.js';
 
 class TestService {
     async createTest(data, userId) {
-        const { title, description, duration, questions, scheduledStart, scheduledEnd } = data;
+        const {
+            title,
+            description,
+            duration,
+            scheduledStart,
+            scheduledEnd,
+            questions,
+            attemptType,
+            maxAttempts,
+            type, // 'STANDARD' or 'SWITCH'
+            switchConfig // { durationSeconds, maxLevel }
+        } = data;
 
         if (scheduledStart && scheduledEnd && new Date(scheduledStart) >= new Date(scheduledEnd)) {
             throw new AppError('Scheduled End time must be after Start time', 400);
@@ -15,27 +26,50 @@ class TestService {
             throw new AppError('Scheduled Start time cannot be in the past', 400);
         }
 
-        return await prisma.test.create({
+        // Default duration for standard tests if not provided
+        let finalDuration = duration || 30;
+
+        // If Switch Challenge, use the config duration
+        if (type === 'SWITCH' && switchConfig?.durationSeconds) {
+            finalDuration = Math.ceil(switchConfig.durationSeconds / 60);
+        }
+
+        const newTest = await prisma.test.create({
             data: {
                 title,
                 description,
-                duration: parseInt(duration),
+                duration: finalDuration,
                 scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
                 scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null,
                 createdById: userId,
-                questions: {
-                    create: questions.map(q => ({
+                attemptType: attemptType || 'ONCE',
+                maxAttempts: maxAttempts ? parseInt(maxAttempts) : null,
+                type: type || 'STANDARD',
+
+                // Conditional Relations
+                questions: type === 'STANDARD' && questions && questions.length > 0 ? {
+                    create: questions.map((q) => ({
                         text: q.text,
                         type: q.type,
-                        options: q.options || [],
-                        correctAnswer: q.correctAnswer
-                    }))
-                }
+                        options: q.options, // Already JSON array
+                        correctAnswer: q.correctAnswer,
+                    })),
+                } : undefined,
+
+                switchConfig: type === 'SWITCH' ? {
+                    create: {
+                        durationSeconds: switchConfig.durationSeconds || 360,
+                        maxLevel: switchConfig.maxLevel || 5
+                    }
+                } : undefined
             },
             include: {
-                questions: true
-            }
+                questions: true,
+                switchConfig: true
+            },
         });
+
+        return newTest;
     }
 
     async updateTest(id, data, userRole, userId) {
@@ -166,29 +200,26 @@ class TestService {
         });
     }
 
-    async getTestById(id, withAnswers = false) {
-        const includeOptions = withAnswers
-            ? { questions: true }
-            : {
+    async getTestById(id, includeAnswers = false) {
+        const test = await prisma.test.findUnique({
+            where: { id: parseInt(id) },
+            include: {
                 questions: {
                     select: {
                         id: true,
                         text: true,
                         type: true,
-                        options: true
-                    }
-                }
-            };
-
-        const test = await prisma.test.findUnique({
-            where: { id: parseInt(id) },
-            include: {
-                ...includeOptions,
-                _count: { select: { submissions: true } }
-            }
+                        options: true,
+                        correctAnswer: includeAnswers, // Only include if admin
+                    },
+                },
+                switchConfig: true, // Include logic config
+            },
         });
 
-        if (!test) throw new AppError('Test not found', 404);
+        if (!test) {
+            throw new Error('Test not found');
+        }
         return test;
     }
 
@@ -196,14 +227,51 @@ class TestService {
         if (!examSession) throw new AppError('Invalid or expired exam session', 401);
 
         const { id } = params;
-        const { answers, status } = body;
+        const { answers, status, metrics, finalScore, testType } = body; // metrics/finalScore from Switch
         const { submissionId } = examSession;
 
-        const submission = await prisma.testSubmission.findUnique({ where: { id: submissionId } });
+        const submission = await prisma.testSubmission.findUnique({
+            where: { id: submissionId },
+            include: { test: { select: { type: true } } }
+        });
+
         if (!submission) throw new AppError('Submission not found', 404);
         if (submission.status !== 'IN_PROGRESS') throw new AppError('Submission already finalized', 400);
         if (examSession.status !== 'IN_PROGRESS') throw new AppError('Submission already closed', 400);
 
+        // --- HANDLE SWITCH CHALLENGE ---
+        if (submission.test.type === 'SWITCH' || testType === 'SWITCH') {
+            // 1. Validate Metrics (Basic)
+            if (!metrics) throw new AppError('Missing performance metrics', 400);
+
+            const score = finalScore || 0;
+            const accuracy = metrics.correct / (metrics.totalAttempts || 1);
+
+            await prisma.$transaction([
+                // Create specialized result record
+                prisma.switchChallengeResult.create({
+                    data: {
+                        userId: submission.studentId,
+                        testId: parseInt(id),
+                        score: score,
+                        accuracy: accuracy,
+                        metrics: metrics,
+                        submissionId: submission.id // REQUIRED by schema
+                    }
+                }),
+                // Update main submission record for integrity
+                prisma.testSubmission.update({
+                    where: { id: submission.id },
+                    data: {
+                        score: score,
+                        status: metrics.reason === 'TIMEOUT' ? 'TIMEOUT' : (metrics.reason === 'VIOLATION_LIMIT' ? 'TERMINATED' : 'COMPLETED'),
+                    }
+                })
+            ]);
+            return { success: true, submissionId: submission.id };
+        }
+
+        // --- HANDLE STANDARD TEST ---
         const correctQuestions = await prisma.question.findMany({
             where: { testId: parseInt(id) },
             select: { id: true, correctAnswer: true },
@@ -238,7 +306,6 @@ class TestService {
         ]);
 
         return { success: true, submissionId: submission.id };
-
     }
 
     async getTestResult(submissionId, userId, role) {
@@ -261,13 +328,35 @@ class TestService {
     }
 
     async getMySubmissions(studentId) {
-        return await prisma.testSubmission.findMany({
-            where: { studentId: studentId },
+        // 1. Get Standard Submissions
+        const standardMatches = await prisma.testSubmission.findMany({
+            where: { studentId },
             include: {
-                test: { select: { title: true, _count: { select: { questions: true } } } }
+                test: {
+                    select: {
+                        title: true,
+                        type: true,
+                        _count: { select: { questions: true } }
+                    }
+                }
             },
             orderBy: { createdAt: 'desc' }
         });
+
+        // 2. Get Switch Submissions
+        const switchMatches = await prisma.switchChallengeResult.findMany({
+            where: { userId: studentId },
+            include: {
+                test: {
+                    select: { title: true, type: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // 3. Merge and Sort
+        const all = [...standardMatches, ...switchMatches].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        return all;
     }
 
     async getTestSubmissions(testId, page = 1, limit = 10) {

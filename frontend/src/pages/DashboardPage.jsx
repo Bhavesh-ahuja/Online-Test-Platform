@@ -55,8 +55,8 @@ function DashboardPage() {
 
     try {
       const response = await authFetch(`/api/tests/${testToDelete.id}`, {
-  method: "DELETE",
-});
+        method: "DELETE",
+      });
 
 
       const data = await response.json();
@@ -100,12 +100,18 @@ function DashboardPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Link
-  to={`/test/${test.id}/instructions`}
-  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center"
->
-  Take Test
-</Link>
+              <button
+                onClick={() => {
+                  if (test.type === 'SWITCH') {
+                    navigate(`/switch-challenge/${test.id}`);
+                  } else {
+                    navigate(`/test/${test.id}/instructions`);
+                  }
+                }}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Start Test {test.type === 'SWITCH' && '🔄'}
+              </button>
 
 
               {isAdmin && (
