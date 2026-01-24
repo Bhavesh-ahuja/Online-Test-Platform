@@ -34,10 +34,14 @@ model User {
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  firstName String @default("")
+  lastName  String @default("")
 
   // Relation: One user can create many tests
   tests     Test[]
   submissions TestSubmission[] // A user can have many submissions
+  switchResults SwitchChallengeResult[]
 }
 
 // Defines the Test table
@@ -53,13 +57,18 @@ model Test {
   // New Features
   attemptType AttemptType @default(ONCE)
   maxAttempts Int?
+  
+  type        TestType    @default(STANDARD)
+  
+  switchConfig SwitchChallengeConfig?
 
   createdById Int
   createdBy   User       @relation(fields: [createdById], references: [id])
   
   // Relation: One test has many questions & can have many submissions
   questions   Question[]
-  submissions TestSubmission[] 
+  submissions TestSubmission[]
+  switchResults SwitchChallengeResult[] 
 
 }
 
@@ -92,6 +101,8 @@ model TestSubmission {
   student   User     @relation(fields: [studentId], references: [id])
   
   answers   Answer[] // A submission is made up of many answers
+  switchResult SwitchChallengeResult?
+
 
   @@index([testId])
   @@index([studentId])
@@ -107,4 +118,42 @@ model Answer {
   submission   TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   questionId   Int
   question     Question       @relation(fields: [questionId], references: [id])
+}
+
+// =========================
+// AON SWITCH CHALLENGE MODELS
+// =========================
+
+enum TestType {
+  STANDARD
+  SWITCH
+}
+
+model SwitchChallengeConfig {
+  id              Int @id @default(autoincrement())
+  testId          Int @unique
+  durationSeconds Int @default(360)
+  maxLevel        Int @default(5)
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+}
+
+model SwitchChallengeResult {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  testId    Int
+  score     Int
+  accuracy  Float
+  metrics   Json     @db.Json // Stores detailed metrics like { totalAttempts, avgReactionMs, maxLevel, violations }
+  createdAt DateTime @default(now())
+
+  // Optional: Relation to User and Test if needed for integrity constraints
+  // For high performance, we might keep these as raw IDs or add relations if consistency is preferred over raw insert speed.
+  // Given the requirement "Do one DB insert, No loops", adding relations here is fine as long as we insert using connect.
+  
+  user   User @relation(fields: [userId], references: [id])
+  test   Test @relation(fields: [testId], references: [id])
+  
+  submissionId Int @unique
+  submission TestSubmission @relation(fields: [submissionId], references: [id])
 }

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import autoTable from 'jspdf-autotable';
+import { API_BASE_URL } from '../../config';
 import { authFetch } from '../utils/authFetch';
-import { jsPDF } from 'jspdf';
 
 function AdminResultsPage() {
   const { id } = useParams(); // Test ID
@@ -23,7 +22,8 @@ function AdminResultsPage() {
       if (!token) return navigate('/login');
 
       try {
-        const response = await authFetch(`/api/tests/${id}/submissions?page=${page}&limit=10`);
+        // Updated to pass sorting params to backend
+        const response = await authFetch(`/api/tests/${id}/submissions?page=${page}&limit=10&sortBy=score&order=${sortOrder}`);
 
 
         if (!response.ok) throw new Error('Failed to fetch submissions');
@@ -37,13 +37,7 @@ function AdminResultsPage() {
       }
     };
     fetchSubmissions();
-  }, [id, navigate, page]);
-
-  // Sorting Logic
-  const sortedSubmissions = [...submissions].sort((a, b) => {
-    if (sortOrder === 'desc') return b.score - a.score;
-    return a.score - b.score;
-  });
+  }, [id, navigate, page, sortOrder]); // Added sortOrder dependency
 
   // Badge Logic
   const getStatusBadge = (status) => {
@@ -57,50 +51,34 @@ function AdminResultsPage() {
     }
   };
 
-  // Generate Report PDF
-  const handleDownloadReport = () => {
-    const doc = new jsPDF();
+  // New Backend PDF Download
+  const handleDownloadReport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/tests/${id}/export-pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    // 1. Title
-    doc.setFontSize(18);
-    doc.text('Test Result Report', 14, 22);
+      if (!response.ok) throw new Error('Download failed');
 
-    doc.setFontSize(12);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+      // Create Blob and Link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
 
-    // 2. Prepare Data for Table
-    // Columns: [Email, Score, Status, Date]
-    const tableData = sortedSubmissions.map(sub => [
-      sub.student.email,
-      sub.score,
-      sub.status,
-      new Date(sub.createdAt).toLocaleDateString() + ' ' + new Date(sub.createdAt).toLocaleTimeString()
-    ]);
+      // Extract filename from header if possible, or default
+      // const contentDisposition = response.headers.get('Content-Disposition');
+      a.download = `Test_${id}_Class_Report.pdf`;
 
-    // 3. Generate Table
-    autoTable(doc, {
-      startY: 40,
-      head: [['Student Email', 'Score', 'Status', 'Date Submitted']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [44, 62, 80] }, //Dark header
-      styles: { fontSize: 10 },
-      didParseCell: (data) => {
-        // Highlight Cheaters in Red in the PDF
-        if (data.section === 'body' && data.column.index === 2) {
-          if (data.cell.raw === 'TERMINATED') {
-            data.cell.styles.textColor = [255, 0, 0];  //Red
-            data.cell.styles.fontStyle = 'bold';
-          } else if (data.cell.raw === 'COMPLETED') {
-            data.cell.styles.textColor = [0, 128, 0]; // Green
-          }
-        }
-      }
-    });
-
-    // 4. Save
-    doc.save('Class_Report.pdf');
-  }
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to download report: " + err.message);
+    }
+  };
 
   if (loading) return <div className="text-center mt-10">Loading data...</div>;
   if (error) return <div className="text-center mt-10 text-red-500">{error}</div>;
@@ -138,6 +116,7 @@ function AdminResultsPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -146,24 +125,51 @@ function AdminResultsPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {sortedSubmissions.map((sub) => (
+            {submissions.map((sub) => (
               <tr key={sub.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sub.student.email}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {sub.student.firstName} {sub.student.lastName}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sub.student.email}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-bold">{sub.score}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(sub.status)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(sub.createdAt).toLocaleString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <Link to={`/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">View Full Answer</Link>
+                  <Link to={`/test/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">View Full Answer</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {sortedSubmissions.length === 0 && (
+        {submissions.length === 0 && (
           <div className="p-6 text-center text-gray-500">No submissions yet.</div>
         )}
       </div>
-    </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center mt-4">
+        <button
+          onClick={() => setPage(p => Math.max(1, p - 1))}
+          disabled={page === 1}
+          className={`px-4 py-2 border rounded ${page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+        >
+          Previous
+        </button>
+
+        <span className="text-gray-600">
+          Page {page} of {totalPages}
+        </span>
+
+        <button
+          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          disabled={page === totalPages || totalPages === 0}
+          className={`px-4 py-2 border rounded ${page === totalPages || totalPages === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+        >
+          Next
+        </button>
+      </div>
+    </div >
+
   );
 }
 

@@ -64,10 +64,16 @@ function MyResultsPage() {
                                         {sub.test.title}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                        <span className="font-bold text-blue-600">{sub.score}</span> / {sub.test._count.questions}
+                                        {sub.test.type === 'SWITCH' ? (
+                                            <span className="font-bold text-blue-600">{sub.score} (Switch)</span>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-blue-600">{sub.score}</span> / {sub.test._count?.questions || '-'}
+                                            </>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <Link to={`/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">
+                                        <Link to={`/test/results/${sub.id}`} className="text-indigo-600 hover:text-indigo-900">
                                             View Details
                                         </Link>
                                     </td>
