@@ -301,29 +301,32 @@ function CreateTestPage() {
                 <button type="button" className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 disabled:opacity-50">
                   {isUploading ? 'Processing...' : 'Upload PDF'}
                 </button>
-              )}
+        
             </div>
-          </div>
-          <div className="flex items-center gap-2 mt-4">
+            <div className="flex items-center gap-2 mt-4">
   <input
     type="checkbox"
     id="showResult"
-    className="w-4 h-4 accent-blue-600"
     checked={testData.showResult}
-    onChange={(e) => setTestData({ ...testData, showResult: e.target.checked })}
+    onChange={(e) =>
+      setTestData({ ...testData, showResult: e.target.checked })
+    }
   />
-  <label htmlFor="showResult" className="text-sm font-medium text-gray-700">
+  <label htmlFor="showResult">
     Show result immediately after submission
   </label>
 </div>
-        </div>
+
+          </div>
+         
+        
 
             {/* QUESTION LIST */}
             {questions.map((q, qi) => (
               <div key={qi} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 relative group">
                 <button type="button" onClick={() => removeQuestion(qi)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold text-xl">×</button>
 
-               <input />
+               
 <div className="mb-4">
   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
     Question {qi + 1}

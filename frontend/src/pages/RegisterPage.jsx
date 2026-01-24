@@ -12,9 +12,7 @@ function RegisterPage() {
     lastName: '',
     email: '',
     password: '',
-    role: 'STUDENT'
-  });
-  email: '',
+    role: 'STUDENT',
   password: '',
   fullName: '',    // New
   badgeNumber: '', // New
