@@ -63,22 +63,34 @@ export function useTestEngine(testId) {
     };
   }, [testId]);
 
-  // 2. Timer Logic
-  useEffect(() => {
-    if (!loading && timeLeft > 0 && submissionStatus === 'IN_PROGRESS') {
-      timerIntervalRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerIntervalRef.current);
-            handleSubmit('TIMEOUT');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timerIntervalRef.current);
-  }, [loading, submissionStatus]);
+    // 2. Timer Logic (Delta Calculation)
+    const localTimerRef = useRef(null);
+
+    useEffect(() => {
+        // Clear any existing timer to avoid duplicates when dependencies change
+        if (localTimerRef.current) clearInterval(localTimerRef.current);
+
+        if (!loading && timeLeft > 0 && submissionStatus === 'IN_PROGRESS') {
+            const terminationTime = Date.now() + (timeLeft * 1000);
+
+            localTimerRef.current = setInterval(() => {
+                const now = Date.now();
+                const remainingRaw = Math.ceil((terminationTime - now) / 1000);
+                const remaining = Math.max(0, remainingRaw);
+
+                setTimeLeft(remaining);
+
+                if (remaining <= 0) {
+                    clearInterval(localTimerRef.current);
+                    handleSubmit('TIMEOUT');
+                }
+            }, 1000);
+        }
+
+        return () => {
+            if (localTimerRef.current) clearInterval(localTimerRef.current);
+        };
+    }, [loading, submissionStatus]); // Removed timeLeft dependency to prevent infinite re-creation loop
 
   // 3. Autosave
   const examToken = sessionStorage.getItem('examSessionToken');

@@ -27,12 +27,12 @@ class AuthService {
         badgeNumber,   // Saved as provided by user
         year,          // Saved as provided by user
         prn,           // Saved as provided by user
-        role 
+        role, firstName, lastName 
       },
+      select: { id: true, email: true, role: true, firstName: true, lastName: true }
     });
 
-    const { password: _, ...userWithoutPassword } = newUser;
-    return userWithoutPassword;
+    return newUser;
   }
 
   async login(email, password) {
@@ -49,7 +49,7 @@ class AuthService {
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
     );
 
     // Return user details including identity fields so the frontend can store them

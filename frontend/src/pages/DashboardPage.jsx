@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../../config'; // ✅ FROM 1st VERSION
 import Modal from '../components/Modal';
 import { authFetch } from "../utils/authFetch";
+import { testsApi } from '../api/tests';
 
 function DashboardPage() {
   const [tests, setTests] = useState([]);
@@ -19,16 +19,11 @@ function DashboardPage() {
 
   // 1. Fetch Tests
   const fetchTests = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return navigate('/login');
+    // If we're not logged in, redirection might happen by authFetch or we check here
+    if (!localStorage.getItem('token')) return navigate('/login');
 
     try {
-      const response = await authFetch("/api/tests");
-
-
-      if (!response.ok) throw new Error('Failed to fetch tests');
-
-      const data = await response.json();
+      const data = await testsApi.getAll();
       setTests(data);
     } catch (err) {
       setError(err.message);
@@ -55,8 +50,8 @@ function DashboardPage() {
 
     try {
       const response = await authFetch(`/api/tests/${testToDelete.id}`, {
-  method: "DELETE",
-});
+        method: "DELETE",
+      });
 
 
       const data = await response.json();
@@ -100,13 +95,91 @@ function DashboardPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Link
-  to={`/test/${test.id}/instructions`}
-  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-center"
->
-  Take Test
-</Link>
+              {/* SMART DASHBOARD LOGIC */}
+              {(() => {
+                const status = test.userStatus?.status;
+                const submissionId = test.userStatus?.submissionId;
+                const attempts = test.userStatus?.attemptCount || 0;
 
+                const isResume = status === 'IN_PROGRESS';
+                const isCompleted = ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(status);
+                const maxReached = test.attemptType === 'LIMITED' && attempts >= (test.maxAttempts || 1);
+
+                // 1. RESUME
+                if (isResume) {
+                  return (
+                    <button
+                      onClick={() => {
+                        if (test.type === 'SWITCH') {
+                          navigate(`/switch-challenge/${test.id}`);
+                        } else {
+                          navigate(`/test/${test.id}`);
+                        }
+                      }}
+                      className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    >
+                      ▶ Resume Test
+                    </button>
+                  );
+                }
+
+                // 2. VIEW RESULTS
+                if (isCompleted) {
+                  return (
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/test/results/${submissionId}`}
+                        className="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition text-center flex items-center justify-center text-sm font-medium"
+                      >
+                        📊 View Results
+                      </Link>
+
+                      {!maxReached && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm("Start a new attempt?")) {
+                              if (test.type === 'SWITCH') {
+                                navigate(`/switch-challenge/${test.id}`);
+                              } else {
+                                navigate(`/test/${test.id}/instructions`);
+                              }
+                            }
+                          }}
+                          className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                          title="Start New Attempt"
+                        >
+                          ↻
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                // 3. LOCKED
+                if (maxReached) {
+                  return (
+                    <div className="w-full py-2 bg-gray-100 text-gray-500 rounded text-center text-sm font-medium cursor-not-allowed border border-gray-200">
+                      🔒 Max Attempts Reached
+                    </div>
+                  );
+                }
+
+                // 4. START (Default)
+                return (
+                  <button
+                    onClick={() => {
+                      if (test.type === 'SWITCH') {
+                        navigate(`/switch-challenge/${test.id}`);
+                      } else {
+                        navigate(`/test/${test.id}/instructions`);
+                      }
+                    }}
+                    className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Start Test {test.type === 'SWITCH' && '🔄'}
+                  </button>
+                );
+              })()}
 
               {isAdmin && (
                 <div className="flex gap-2">

@@ -80,13 +80,13 @@ function LoginPage() {
           </div>
 
           {/* Google Button (Visual only for now) */}
-          <button
+          {/* <button
             type="button"
             className="flex items-center justify-center gap-3 w-fit px-8 py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full transition-all duration-300 backdrop-blur-sm"
           >
             <FcGoogle className="text-2xl" />
             <span className="text-sm font-medium">Login with Google</span>
-          </button>
+          </button> */}
 
           {/* Register Link */}
           <div className="text-sm text-gray-400">

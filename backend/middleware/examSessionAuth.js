@@ -19,22 +19,29 @@ export const authenticateExamSession = async (req, res, next) => {
 
     // 🔴 HARD STOP: submission must exist AND be IN_PROGRESS
     if (
-  !submission ||
-  submission.studentId !== decoded.studentId
-) {
-  return res.status(401).json({
-    error: 'Invalid exam session'
-  });
-}
+      !submission ||
+      submission.studentId !== decoded.studentId
+    ) {
+      return res.status(401).json({
+        error: 'Invalid exam session'
+      });
+    }
+
+    // 🔴 Security Check: Ensure token matches the requested Test ID
+    if (req.params.id && submission.testId !== parseInt(req.params.id)) {
+      return res.status(403).json({
+        error: 'Session token invalid for this test'
+      });
+    }
 
 
     // Attach to request (single source of truth)
     req.examSession = {
-  submissionId: submission.id,
-  testId: submission.testId,
-  studentId: submission.studentId,
-  status: submission.status
-};
+      submissionId: submission.id,
+      testId: submission.testId,
+      studentId: submission.studentId,
+      status: submission.status
+    };
 
     next();
   } catch (err) {

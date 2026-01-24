@@ -7,6 +7,8 @@ import QuestionPalette from '../components/QuestionPalette';
 
 const MAX_WARNINGS = 3;
 
+import { useKeyboardLock } from '../hooks/useKeyboardLock';
+
 function WarningBanner({ count }) {
   if (!count) return null;
   return (
@@ -41,6 +43,10 @@ function TestPage() {
 
   // --- 2. Local UI State (The View) ---
   const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
+
+  // --- 3. Security (Keyboard Lock) ---
+  // Only lock when the test is effectively running (not loading, no error)
+  useKeyboardLock(!loading && !error, addWarning);
 
   // --- 3. Proctoring Logic (UI Event Listeners) ---
   // We keep listeners here because they interact with the DOM/Window directly
@@ -78,15 +84,13 @@ function TestPage() {
     };
   }, [addWarning]);
 
-  // No-Copy Shield
+  // No-Copy Shield (Events not covered by Keyboard Lock)
   useEffect(() => {
     const block = e => e.preventDefault();
-    document.addEventListener('contextmenu', block);
     document.addEventListener('copy', block);
     document.addEventListener('cut', block);
     document.addEventListener('paste', block);
     return () => {
-      document.removeEventListener('contextmenu', block);
       document.removeEventListener('copy', block);
       document.removeEventListener('cut', block);
       document.removeEventListener('paste', block);

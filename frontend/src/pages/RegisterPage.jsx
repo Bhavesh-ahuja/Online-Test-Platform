@@ -2,12 +2,18 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
 // Ensure react-icons is installed: npm install react-icons
-import { FcGoogle } from 'react-icons/fc'; 
+import { FcGoogle } from 'react-icons/fc';
 
 function RegisterPage() {
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    role: 'STUDENT'
+  });
   email: '',
   password: '',
   fullName: '',    // New
@@ -54,7 +60,7 @@ function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden font-sans">
-      
+
       {/* --- Background Ambient Glows --- */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900 rounded-full blur-[120px] opacity-40 pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-blue-900 rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
@@ -62,43 +68,43 @@ function RegisterPage() {
       {/* --- Main Content Container --- */}
       <div className="flex-grow flex items-center justify-center px-4 sm:px-12 lg:px-24 z-10 relative">
         <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          
+
           {/* LEFT SIDE: Branding Text */}
           <div className="space-y-8 text-center lg:text-left">
             <div>
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-4 uppercase">
-                Create <br/>Account
+                Create <br />Account
               </h1>
               <p className="text-gray-400 text-lg">
-                Join our community! <br/>
+                Join our community! <br />
                 Start your journey today.
               </p>
             </div>
 
             {/* Google Sign Up Button */}
             <div className="flex justify-center lg:justify-start">
-               <button 
-                type="button" 
+              <button
+                type="button"
                 className="flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-6 py-3 rounded-full transition-all duration-300 backdrop-blur-sm group"
               >
-                <FcGoogle className="text-2xl group-hover:scale-110 transition-transform" /> 
+                <FcGoogle className="text-2xl group-hover:scale-110 transition-transform" />
                 <span className="font-medium tracking-wide">Sign up with Google</span>
               </button>
             </div>
 
             {/* Login Link */}
             <p className="text-gray-500 mt-6">
-               Already have an account?{' '}
-               <Link to="/login" className="text-white font-bold underline decoration-purple-500 decoration-2 underline-offset-4 hover:text-purple-400 transition">
-                 Log In
-               </Link>
+              Already have an account?{' '}
+              <Link to="/login" className="text-white font-bold underline decoration-purple-500 decoration-2 underline-offset-4 hover:text-purple-400 transition">
+                Log In
+              </Link>
             </p>
           </div>
 
           {/* RIGHT SIDE: The Registration Form */}
           <div className="w-full max-w-md mx-auto lg:ml-auto">
             <div className="bg-[#111111] border border-gray-800 p-8 rounded-2xl shadow-2xl shadow-purple-900/20 backdrop-blur-xl relative">
-              
+
               {/* Top Gradient Border Line */}
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-600 to-transparent opacity-50"></div>
 
@@ -108,13 +114,43 @@ function RegisterPage() {
               {/* Error Message */}
               {error && (
                 <div className="bg-red-900/20 border border-red-500/50 text-red-200 px-4 py-3 rounded mb-6 text-sm flex items-center">
-                   <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
-                   {error}
+                  <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+                  {error}
                 </div>
               )}
 
               <form className="space-y-5" onSubmit={handleSubmit}>
-                
+
+                {/* Name Fields (Row) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label htmlFor="firstName" className="block text-xs font-mono text-gray-400 uppercase tracking-wider">First Name</label>
+                    <input
+                      id="firstName"
+                      name="firstName"
+                      type="text"
+                      required
+                      placeholder="John"
+                      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="lastName" className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Last Name</label>
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      type="text"
+                      required
+                      placeholder="Doe"
+                      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+
                 {/* Email Field */}
                 <div className="space-y-1">
                   <label htmlFor="email" className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Email address</label>

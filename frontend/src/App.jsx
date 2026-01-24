@@ -17,6 +17,7 @@ import MyResultsPage from './pages/MyResultsPage';
 import AdminResultsPage from './pages/AdminResultsPage';
 import TestInstructions from './pages/TestInstructions';
 import ProfilePage from './pages/ProfilePage';
+import SwitchChallengePage from './pages/SwitchChallengePage';
 import TestSubmitted from "./pages/TestSubmitted";
 
 
@@ -35,13 +36,19 @@ function AppRoutes() {
       <Route path="/tests/:id/admin-results" element={<MainLayout><AdminResultsPage /></MainLayout>} />
       <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
       <Route path="/test/:id/instructions" element={<MainLayout><TestInstructions /></MainLayout>} />
-      <Route path="/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
+      <Route path="/test/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
       <Route path="/my-results" element={<MainLayout><MyResultsPage /></MainLayout>} />
       <Route path="/test-submitted" element={<TestSubmitted />} />
       {/* Exam Route (Wrapped in ExamLayout) */}
       <Route
         path="/test/:id"
         element={<ExamLayout><TestPage key={location.pathname} /></ExamLayout>}
+      />
+
+      {/* Switch Challenge Route */}
+      <Route
+        path="/switch-challenge/:id"
+        element={<SwitchChallengePage />} /* Use ExamLayout? The page has its own layout logic */
       />
     </Routes>
   );

@@ -1,9 +1,9 @@
-// TimerDisplay.jsx
 import React from 'react';
 
 function TimerDisplay({ seconds }) {
+    // 1. Format the time logic (Keep this as is)
     const formatTime = () => {
-        const safeSeconds = Math.max(0, Math.floor(seconds));
+        const safeSeconds = Math.max(0, Math.floor(seconds || 0));
         const minutes = Math.floor(safeSeconds / 60);
         const remainingSeconds = safeSeconds % 60;
         const minStr = String(minutes).padStart(2, '0');
@@ -11,13 +11,15 @@ function TimerDisplay({ seconds }) {
         return `${minStr}:${secStr}`;
     };
 
+    // 2. Logic for Red Color when less than 60 seconds
+    const isLowTime = seconds < 60;
+
+    // 3. Return ONLY the time string. 
+    // The parent component (TestPage) handles the background, icons, and layout.
     return (
-        <div className="bg-gray-800 text-white p-3 px-6 flex justify-between items-center shadow-md">
-            <span className="font-semibold text-gray-300 tracking-wide">Online Test Platform</span>
-            <span className={`font-bold text-xl font-mono ${seconds < 60 ? 'text-red-400 animate-pulse' : 'text-blue-300'}`}>
-                Time Left: {formatTime()}
-            </span>
-        </div>
+        <span className={isLowTime ? 'text-red-600 animate-pulse' : 'text-inherit'}>
+            {formatTime()}
+        </span>
     );
 }
 
