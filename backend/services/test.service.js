@@ -196,97 +196,67 @@ class TestService {
         return test;
     }
 
-    async submitTest(params, body, examSession) {
-  if (!examSession) {
-    throw new AppError('Invalid or expired exam session', 401);
-  }
-
-  const { id } = params;
-  const { answers, status } = body;
+   async submitTest(params, body, examSession) {
+  const { id } = params; // Test ID
+  const { answers, status } = body; // status will be 'COMPLETED', 'TIMEOUT', etc.
   const { submissionId } = examSession;
 
-  // 1️⃣ Fetch submission FIRST
-  const submission = await prisma.testSubmission.findUnique({
-    where: { id: submissionId }
-  });
-
-  if (!submission) throw new AppError('Submission not found', 404);
-  if (submission.status !== 'IN_PROGRESS') {
-    throw new AppError('Submission already finalized', 400);
-  }
-
-  // 2️⃣ Fetch test config SECOND
+  // 1. Get the Test Configuration to see if the checkbox was checked
   const testConfig = await prisma.test.findUnique({
     where: { id: parseInt(id) },
     select: { showResult: true }
   });
 
-  // 3️⃣ Fetch user role THIRD
+  // 2. Get the User Role
   const user = await prisma.user.findUnique({
-    where: { id: submission.studentId },
+    where: { id: examSession.studentId },
     select: { role: true }
   });
 
-  if (!user) throw new AppError('User not found', 404);
+  // 3. Logic: Should this specific student see the result?
+  const canSeeResult = user.role === 'ADMIN' ? true : Boolean(testConfig?.showResult);
 
-  // 4️⃣ Decide result visibility
-  const canSeeResult =
-  user.role === 'ADMIN'
-    ? true
-    : Boolean(testConfig?.showResult);
-
+  // 4. Calculate the Final Score
   const questions = await prisma.question.findMany({
-    where: { testId: parseInt(id) },
-    select: { id: true, correctAnswer: true }
+    where: { testId: parseInt(id) }
   });
 
   let score = 0;
-  const answerRecords = [];
-
-  for (const q of questions) {
+  const answerRecords = questions.map(q => {
     const studentAnswer = answers?.[q.id];
     const isCorrect = studentAnswer === q.correctAnswer;
     if (isCorrect) score++;
-
-    answerRecords.push({
+    return {
       selectedAnswer: studentAnswer || 'No Answer',
       isCorrect,
       questionId: q.id,
-      submissionId: submission.id
-    });
-  }
+      submissionId: submissionId
+    };
+  });
 
-  // 6️⃣ Save results
+  // 5. Final Save: Update score, status, and the visibility flag
   await prisma.$transaction([
-  prisma.answer.deleteMany({ where: { submissionId: submission.id } }),
-  prisma.answer.createMany({ data: answerRecords }),
-  prisma.testSubmission.update({
-    where: { id: submission.id },
-    data: {
-      score,
-      status: ['TIMEOUT', 'TERMINATED'].includes(status)
-        ? status
-        : 'COMPLETED',
-      canViewResult: canSeeResult   // ✅ THIS WAS MISSING
-    }
-  })
-]);
+    prisma.answer.deleteMany({ where: { submissionId } }),
+    prisma.answer.createMany({ data: answerRecords }),
+    prisma.testSubmission.update({
+      where: { id: submissionId },
+      data: {
+        score,
+        status: status || 'COMPLETED', // This is where status is saved
+        canViewResult: canSeeResult   // This is where the checkbox logic is saved
+      }
+    })
+  ]);
 
-
-  console.log('SUBMIT DEBUG →', {
-  submissionId: submission.id,
-  canSeeResult,
-});
-
-
-  // 7️⃣ Return decision to frontend
- return {
-  success: true,
-  submissionId: submission.id,
-  showResult: canSeeResult
-};
+  return {
+    success: true,
+    submissionId,
+    showResult: canSeeResult // Tells frontend whether to redirect to Results or "Submitted" page
+  };
 }
 
+
+  
 
     async getTestResult(submissionId, userId, role) {
         
