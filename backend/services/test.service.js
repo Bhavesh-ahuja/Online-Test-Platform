@@ -484,10 +484,10 @@ class TestService {
                 include: {
                     student: {
                         select: {
-                            fullName: true,
+                            firstName: true,
+                            lastName: true,
                             prn: true,
                             email: true,
-                            badgeNumber: true,
                             year: true, id: true
                         }
                     },
