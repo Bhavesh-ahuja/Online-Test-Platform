@@ -6,6 +6,7 @@ export const createTestSchema = z.object({
     duration: z.coerce.number().int().positive('Duration must be a positive integer'),
     scheduledStart: z.string().datetime().nullable().optional(),
     scheduledEnd: z.string().datetime().nullable().optional(),
+    showResult: z.boolean().optional().default(true),
 
     // New Fields
     type: z.enum(['STANDARD', 'SWITCH']).optional().default('STANDARD'),

@@ -29,7 +29,7 @@ class TestService {
         if (scheduledStart && scheduledEnd && new Date(scheduledStart) >= new Date(scheduledEnd)) {
             throw new AppError('Scheduled End time must be after Start time', 400);
         }
-        if (scheduledStart && new Date(scheduledStart) < new Date(new Date().getTime() - 60000)) { // Allow 1 min buffer
+        if (scheduledStart && new Date(scheduledStart) < new Date(new Date().getTime() - 3600000)) { // Allow 1 hour buffer for testing
             throw new AppError('Scheduled Start time cannot be in the past', 400);
         }
 
@@ -94,16 +94,16 @@ class TestService {
 
         // 3. Prepare Update Data
         const updateData = {
-  title: data.title,
-  description: data.description,
-  duration: parseInt(data.duration),
-  scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
-  scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
-  showResult: data.showResult,
-  attemptType: data.attemptType,
-  maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
-  
-};
+            title: data.title,
+            description: data.description,
+            duration: parseInt(data.duration),
+            scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : null,
+            scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : null,
+            showResult: data.showResult,
+            attemptType: data.attemptType,
+            maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
+
+        };
 
 
 
@@ -173,6 +173,9 @@ class TestService {
 
             if (test.attemptType === 'LIMITED' && test.maxAttempts !== null && completedCount >= test.maxAttempts) {
                 throw new AppError('Maximum attempts reached', 403);
+            }
+            if (test.attemptType === 'ONCE' && completedCount >= 1) {
+                throw new AppError('You have already taken this test', 403);
             }
 
             const submission = await tx.testSubmission.create({
@@ -326,7 +329,7 @@ class TestService {
         return await prisma.$transaction(async (tx) => {
             const submission = await tx.testSubmission.findUnique({
                 where: { id: submissionId },
-                include: { test: { select: { type: true } } }
+                include: { test: { select: { type: true, showResult: true } } }
             });
 
             if (!submission) throw new AppError('Submission not found', 404);
@@ -391,6 +394,7 @@ class TestService {
                 data: {
                     score,
                     status: newStatus,
+                    canViewResult: submission.test.showResult,
                 }
             });
 
@@ -398,17 +402,17 @@ class TestService {
                 throw new AppError('Submission race condition detected - already finalized', 409);
             }
 
-            return { success: true, submissionId: submission.id };
+            return { success: true, submissionId: submission.id, showResult: submission.test.showResult };
         });
     }
 
     async getTestResult(submissionId, userId, role) {
-        
+
 
         const submission = await prisma.testSubmission.findUnique({
             where: { id: parseInt(submissionId) },
             include: {
-                test: { select: { title: true,showResult: true, _count: { select: { questions: true } } } },
+                test: { select: { title: true, showResult: true, _count: { select: { questions: true } } } },
                 answers: {
                     include: {
                         question: { select: { text: true, options: true, correctAnswer: true } }
@@ -421,10 +425,10 @@ class TestService {
             throw new AppError('Submission not found or unauthorized', 404);
         }
         if (!submission.canViewResult) {
-  throw new AppError('Results for this test are not available yet.', 403);
+            throw new AppError('Results for this test are not available yet.', 403);
 
 
-    }
+        }
         return submission;
     }
 
@@ -478,11 +482,15 @@ class TestService {
             prisma.testSubmission.findMany({
                 where: { testId: parseInt(testId) },
                 include: {
-                    student: { select: { fullName: true,    
-                    prn: true,         
-                    email: true,
-                    badgeNumber: true,
-                    year: true, id: true } },
+                    student: {
+                        select: {
+                            fullName: true,
+                            prn: true,
+                            email: true,
+                            badgeNumber: true,
+                            year: true, id: true
+                        }
+                    },
                 },
                 orderBy: orderBy,
                 skip,
@@ -677,13 +685,13 @@ class TestService {
         const { answers, markedQuestions } = data;
 
         await prisma.testSubmission.update({
-  where: { id: submission.id },
-  data: {
-    score,
-    status: finalStatus,
-    canViewResult: canSeeResult // ✅ THIS LINE
-  }
-});
+            where: { id: submission.id },
+            data: {
+                score,
+                status: finalStatus,
+                canViewResult: canSeeResult // ✅ THIS LINE
+            }
+        });
 
     }
 }

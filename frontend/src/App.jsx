@@ -37,6 +37,7 @@ function AppRoutes() {
       <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
       <Route path="/test/:id/instructions" element={<MainLayout><TestInstructions /></MainLayout>} />
       <Route path="/test/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
+      <Route path="/results/:submissionId" element={<MainLayout><ResultsPage /></MainLayout>} />
       <Route path="/my-results" element={<MainLayout><MyResultsPage /></MainLayout>} />
       <Route path="/test-submitted" element={<TestSubmitted />} />
       {/* Exam Route (Wrapped in ExamLayout) */}
