@@ -57,19 +57,19 @@ function CreateTestPage() {
   };
 
   const handleQuestionKeyDown = (e, qi) => {
-  if (e.key === 'Enter') {
-    if (e.shiftKey) {
-      // Allow default behavior (new line in textarea)
-      return;
-    } else {
-      // Prevent new line and move to next field
-      e.preventDefault();
-      // Target the first option input of the current question index
-      const nextField = document.querySelector(`input[name="q-${qi}-opt-0"]`);
-      if (nextField) nextField.focus();
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Allow default behavior (new line in textarea)
+        return;
+      } else {
+        // Prevent new line and move to next field
+        e.preventDefault();
+        // Target the first option input of the current question index
+        const nextField = document.querySelector(`input[name="q-${qi}-opt-0"]`);
+        if (nextField) nextField.focus();
+      }
     }
-  }
-};
+  };
 
   // --- Option Management ---
   const addOption = (qi) => {
@@ -278,6 +278,20 @@ function CreateTestPage() {
               </div>
             </div>
 
+            <div className="flex items-center gap-2 mt-4">
+              <input
+                type="checkbox"
+                id="showResult"
+                checked={testData.showResult}
+                onChange={(e) =>
+                  setTestData({ ...testData, showResult: e.target.checked })
+                }
+              />
+              <label htmlFor="showResult">
+                Show result immediately after submission
+              </label>
+            </div>
+
             {testData.type === 'SWITCH' && (
               <div className="bg-purple-50 p-4 rounded text-sm text-purple-800">
                 <h4 className="font-bold mb-1">Switch Challenge Configuration</h4>
@@ -301,76 +315,64 @@ function CreateTestPage() {
                 <button type="button" className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 disabled:opacity-50">
                   {isUploading ? 'Processing...' : 'Upload PDF'}
                 </button>
-        
-            </div>
-            <div className="flex items-center gap-2 mt-4">
-  <input
-    type="checkbox"
-    id="showResult"
-    checked={testData.showResult}
-    onChange={(e) =>
-      setTestData({ ...testData, showResult: e.target.checked })
-    }
-  />
-  <label htmlFor="showResult">
-    Show result immediately after submission
-  </label>
-</div>
 
-          </div>
-         
-        
+              </div>
+
+
+            </div>
+
+
 
             {/* QUESTION LIST */}
             {questions.map((q, qi) => (
               <div key={qi} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 relative group">
                 <button type="button" onClick={() => removeQuestion(qi)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold text-xl">×</button>
 
-               
-<div className="mb-4">
-  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-    Question {qi + 1}
-  </label>
-  <textarea
-    className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white resize-none"
-    placeholder="Enter question text... "
-    value={q.text}
-    onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
-    onKeyDown={(e) => handleQuestionKeyDown(e, qi)}
-    required
-  />
-</div>
 
-              <div className="space-y-2 mb-4">
-                <label className="block text-xs font-bold text-gray-400 uppercase">Options</label>
-                {q.options.map((opt, oi) => (
-                  <div key={oi} className="flex gap-2 items-center">
-                    <span className="text-gray-400 font-mono text-sm w-4">{String.fromCharCode(65 + oi)}</span>
-                    <input
-  name={`q-${qi}-opt-${oi}`} // Add this name attribute
-  className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
-  placeholder={`Option ${oi + 1}`}
-  value={opt}
-  onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
-  required
-/>
-                    <button
-                      type="button"
-                      className="text-gray-300 hover:text-red-500 transition"
-                      onClick={() => removeOption(qi, oi)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="text-blue-600 text-xs font-semibold hover:underline mt-1 ml-6"
-                  onClick={() => addOption(qi)}
-                >
-                  + Add Option
-                </button>
-              </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                    Question {qi + 1}
+                  </label>
+                  <textarea
+                    className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white resize-none"
+                    placeholder="Enter question text... "
+                    value={q.text}
+                    onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
+                    onKeyDown={(e) => handleQuestionKeyDown(e, qi)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <label className="block text-xs font-bold text-gray-400 uppercase">Options</label>
+                  {q.options.map((opt, oi) => (
+                    <div key={oi} className="flex gap-2 items-center">
+                      <span className="text-gray-400 font-mono text-sm w-4">{String.fromCharCode(65 + oi)}</span>
+                      <input
+                        name={`q-${qi}-opt-${oi}`} // Add this name attribute
+                        className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
+                        placeholder={`Option ${oi + 1}`}
+                        value={opt}
+                        onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="text-gray-300 hover:text-red-500 transition"
+                        onClick={() => removeOption(qi, oi)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="text-blue-600 text-xs font-semibold hover:underline mt-1 ml-6"
+                    onClick={() => addOption(qi)}
+                  >
+                    + Add Option
+                  </button>
+                </div>
 
                 <div>
                   <label className="block text-xs font-bold text-green-600 uppercase mb-1">Correct Answer</label>

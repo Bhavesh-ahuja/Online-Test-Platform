@@ -15,7 +15,7 @@ export async function authFetch(path, options = {}) {
   });
 
   // 🔴 Centralized auth failure detection
-  if ((response.status === 401 || response.status === 403) && !isRedirecting) {
+  if (response.status === 401 && !isRedirecting) {
     isRedirecting = true;
 
     // Graceful: allow current promise chain to continue
