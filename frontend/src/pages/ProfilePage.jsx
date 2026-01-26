@@ -52,15 +52,15 @@ function ProfilePage() {
     navigate("/login");
   };
   // 1. Add this mapping helper inside your ProfilePage component
-const getFullYearName = (yearCode) => {
-  const years = {
-    'FE': 'First Year',
-    'SE': 'Second Year',
-    'TE': 'Third Year',
-    'BE': 'Fourth Year'
+  const getFullYearName = (yearCode) => {
+    const years = {
+      'FE': 'First Year',
+      'SE': 'Second Year',
+      'TE': 'Third Year',
+      'BE': 'Fourth Year'
+    };
+    return years[yearCode] || yearCode; // Returns full name if code exists, otherwise returns original
   };
-  return years[yearCode] || yearCode; // Returns full name if code exists, otherwise returns original
-};
 
 
 
@@ -82,69 +82,69 @@ const getFullYearName = (yearCode) => {
         My Profile
       </h1>
 
-      
-<div className="bg-white shadow-md rounded-lg p-6 border border-gray-200 space-y-4">
-  <div>
-    <p className="text-sm text-gray-500">Full Name</p>
-    <p className="text-lg font-medium text-gray-800">
-      {user.fullName || "Not Set"}
-    </p>
-  </div>
 
-  <div>
-    <p className="text-sm text-gray-500">PRN / Badge Number</p>
-    <p className="text-lg font-medium text-gray-800">
-      {user.prn || "N/A"} / {user.badgeNumber || "N/A"}
-    </p>
-  </div>
-
-  <div>
-  <p className="text-sm text-gray-500">Year</p>
-  <p className="text-lg font-medium text-gray-800">
-    {getFullYearName(user.year)}
-  </p>
-</div>
-
-  <div className="pt-2 border-t">
-    <p className="text-sm text-gray-500">Email (Authentication)</p>
-    <p className="text-md text-gray-600">
-      {user.email}
-    </p>
-  </div>
-
-  {/* Keep the Admin Badge and Logout button as they were */}
-</div>
-
-    
-     
+      <div className="bg-white shadow-md rounded-lg p-6 border border-gray-200 space-y-4">
         <div>
-          <p className="text-sm text-gray-500">Role</p>
+          <p className="text-sm text-gray-500">Full Name</p>
           <p className="text-lg font-medium text-gray-800">
-            {user.role}
+            {user.firstName} {user.lastName}
           </p>
         </div>
 
-        {user.role === "ADMIN" && (
-          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-300 rounded">
-            <p className="font-semibold text-yellow-800">
-              Administrator
-            </p>
-            <p className="text-sm text-yellow-700 mt-1">
-              You can create tests and also attempt tests.
-            </p>
-          </div>
-        )}
-
-        <div className="pt-6 border-t mt-6">
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 transition"
-          >
-            Logout
-          </button>
+        <div>
+          <p className="text-sm text-gray-500">PRN</p>
+          <p className="text-lg font-medium text-gray-800">
+            {user.prn || "N/A"}
+          </p>
         </div>
-      
-    </div>  
+
+        <div>
+          <p className="text-sm text-gray-500">Year</p>
+          <p className="text-lg font-medium text-gray-800">
+            {getFullYearName(user.year)}
+          </p>
+        </div>
+
+        <div className="pt-2 border-t">
+          <p className="text-sm text-gray-500">Email (Authentication)</p>
+          <p className="text-md text-gray-600">
+            {user.email}
+          </p>
+        </div>
+
+        {/* Keep the Admin Badge and Logout button as they were */}
+      </div>
+
+
+
+      <div>
+        <p className="text-sm text-gray-500">Role</p>
+        <p className="text-lg font-medium text-gray-800">
+          {user.role}
+        </p>
+      </div>
+
+      {user.role === "ADMIN" && (
+        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-300 rounded">
+          <p className="font-semibold text-yellow-800">
+            Administrator
+          </p>
+          <p className="text-sm text-yellow-700 mt-1">
+            You can create tests and also attempt tests.
+          </p>
+        </div>
+      )}
+
+      <div className="pt-6 border-t mt-6">
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 transition"
+        >
+          Logout
+        </button>
+      </div>
+
+    </div>
   );
 }
 

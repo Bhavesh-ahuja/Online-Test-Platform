@@ -9,9 +9,9 @@ class UserService {
                 id: true,
                 email: true,
                 role: true,
-                fullName: true,    // Added
+                firstName: true,
+                lastName: true,
                 prn: true,         // Added
-                badgeNumber: true, // Added
                 year: true,        // Added
                 createdAt: true
             }

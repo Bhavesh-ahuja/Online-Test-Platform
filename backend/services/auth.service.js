@@ -5,48 +5,44 @@ import AppError from '../utils/AppError.js';
 
 class AuthService {
   async register(data) {
-  const {
-    firstName,
-    lastName,
-    email,
-    password,
-    fullName,
-    badgeNumber,
-    year,
-    prn,
-    role = 'STUDENT',
-  } = data;
-
-  const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    throw new AppError('Email already in use', 400);
-  }
-
-  const existingPrn = await prisma.user.findUnique({ where: { prn } });
-  if (existingPrn) {
-    throw new AppError('PRN already registered', 400);
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const newUser = await prisma.user.create({
-    data: {
+    const {
       firstName,
       lastName,
-      fullName,
       email,
-      password: hashedPassword,
-      prn,
-      badgeNumber,
+      password,
       year,
-      role,
-    },
-  });
+      prn,
+      role = 'STUDENT',
+    } = data;
 
-  return newUser;
-}
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new AppError('Email already in use', 400);
+    }
 
-  
+    const existingPrn = await prisma.user.findUnique({ where: { prn } });
+    if (existingPrn) {
+      throw new AppError('PRN already registered', 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+        prn,
+        year,
+        role,
+      },
+    });
+
+    return newUser;
+  }
+
+
 
   async login(email, password) {
     const user = await prisma.user.findUnique({ where: { email } });
