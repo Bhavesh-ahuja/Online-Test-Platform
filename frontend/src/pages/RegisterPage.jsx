@@ -11,8 +11,7 @@ function RegisterPage() {
     firstName: '',
     lastName: '',
     email: '',
-    year: '',        // New
-    prn: '',         // New
+
     password: '',
     role: 'STUDENT'
   });
@@ -175,37 +174,7 @@ function RegisterPage() {
                   />
                 </div>
 
-                <div className="space-y-4">
-                  {/* PRN */}
-                  <div className="space-y-1">
-                    <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">PRN (Permanent Reg. No.)</label>
-                    <input
-                      name="prn"
-                      type="text"
-                      required
-                      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
-                      value={formData.prn}
-                      onChange={handleChange}
-                    />
-                  </div>
 
-                  {/* Year */}
-                  <div className="space-y-1">
-                    <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Year</label>
-                    <select
-                      name="year"
-                      className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-4 py-3 text-gray-300 focus:border-purple-500 focus:outline-none"
-                      value={formData.year}
-                      onChange={handleChange}
-                    >
-                      <option value="">Select Year</option>
-                      <option value="FE">First Year</option>
-                      <option value="SE">Second Year</option>
-                      <option value="TE">Third Year</option>
-                      <option value="BE">Fourth Year</option>
-                    </select>
-                  </div>
-                </div>
 
                 {/* Role Selection */}
                 <div className="space-y-1">

@@ -11,8 +11,6 @@ class UserService {
                 role: true,
                 firstName: true,
                 lastName: true,
-                prn: true,         // Added
-                year: true,        // Added
                 createdAt: true
             }
         });

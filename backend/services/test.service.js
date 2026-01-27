@@ -486,9 +486,8 @@ class TestService {
                         select: {
                             firstName: true,
                             lastName: true,
-                            prn: true,
                             email: true,
-                            year: true, id: true
+                            id: true
                         }
                     },
                 },

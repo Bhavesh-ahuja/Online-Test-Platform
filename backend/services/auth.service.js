@@ -10,8 +10,7 @@ class AuthService {
       lastName,
       email,
       password,
-      year,
-      prn,
+
       role = 'STUDENT',
     } = data;
 
@@ -20,10 +19,7 @@ class AuthService {
       throw new AppError('Email already in use', 400);
     }
 
-    const existingPrn = await prisma.user.findUnique({ where: { prn } });
-    if (existingPrn) {
-      throw new AppError('PRN already registered', 400);
-    }
+
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -33,8 +29,7 @@ class AuthService {
         lastName,
         email,
         password: hashedPassword,
-        prn,
-        year,
+
         role,
       },
     });
