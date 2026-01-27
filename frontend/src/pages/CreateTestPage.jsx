@@ -196,38 +196,25 @@ function CreateTestPage() {
 
         {/* TYPE SELECTION */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <label className="block text-gray-700 font-bold mb-4">Select Assessment Type</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              type="button"
-              onClick={() => setTestData({ ...testData, type: 'STANDARD', duration: 30 })}
-              className={`py-4 px-6 rounded-xl border-2 text-left transition-all ${testData.type === 'STANDARD' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-            >
-              <div className="font-bold text-lg text-gray-800 mb-1">📝 Standard Test</div>
-              <div className="text-sm text-gray-500">Create custom Multiple Choice or Short Answer questions.</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTestData({ ...testData, type: 'SWITCH', duration: 6 })}
-              className={`py-4 px-6 rounded-xl border-2 text-left transition-all ${testData.type === 'SWITCH' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-            >
-              <div className="font-bold text-lg text-gray-800 mb-1">🔄 AON Switch Challenge</div>
-              <div className="text-sm text-gray-500">Adaptive cognitive assessment. Automatically generated puzzles.</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTestData({ ...testData, type: 'MOTION', duration: 6 })}
-              className={`py-4 px-6 rounded-xl border-2 text-left transition-all ${testData.type === 'MOTION' ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-            >
-              <div className="font-bold text-lg text-gray-800 mb-1">🧩 Motion Challenge</div>
-              <div className="text-sm text-gray-500">Cognitive planning assessment using sliding block puzzles.</div>
-            </button>
-          </div>
+          <label htmlFor="assessment-type" className="block text-gray-700 font-bold mb-3">
+            Select Assessment Type
+          </label>
+          <select
+            id="assessment-type"
+            name="type"
+            value={testData.type}
+            onChange={(e) => {
+              const selectedType = e.target.value;
+              const defaultDuration = selectedType === 'STANDARD' ? 30 : 6;
+              setTestData({ ...testData, type: selectedType, duration: defaultDuration });
+            }}
+            className="w-full md:w-2/3 p-3 border-2 border-gray-300 rounded-lg bg-white text-gray-800 font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all cursor-pointer hover:border-gray-400"
+            required
+          >
+            <option value="STANDARD">📝 Standard Test - Custom MCQ/Short Answer questions</option>
+            <option value="SWITCH">🔄 AON Switch Challenge - Adaptive cognitive assessment</option>
+            <option value="MOTION">🧩 Motion Challenge - Sliding block planning puzzles</option>
+          </select>
         </div>
 
         {/* TABS (Only for Standard) */}
