@@ -130,7 +130,6 @@ model Answer {
 enum TestType {
   STANDARD
   SWITCH
-  MOTION
   DIGIT
 }
 

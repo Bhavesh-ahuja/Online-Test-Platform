@@ -18,7 +18,6 @@ import AdminResultsPage from './pages/AdminResultsPage';
 import TestInstructions from './pages/TestInstructions';
 import ProfilePage from './pages/ProfilePage';
 import SwitchChallengePage from './pages/SwitchChallengePage';
-import MotionChallengePage from './pages/MotionChallengePage';
 import DigitChallengePage from './pages/DigitChallengePage';
 import TestSubmitted from "./pages/TestSubmitted";
 
@@ -54,11 +53,7 @@ function AppRoutes() {
         element={<SwitchChallengePage />} /* Use ExamLayout? The page has its own layout logic */
       />
 
-      {/* Motion Challenge Route */}
-      <Route
-        path="/motion-challenge/:id"
-        element={<MotionChallengePage />}
-      />
+
 
       {/* Digit Challenge Route */}
       <Route

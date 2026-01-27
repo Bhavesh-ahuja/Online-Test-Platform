@@ -13,7 +13,7 @@ function CreateTestPage() {
     showResult: true,
     scheduledStart: '',
     scheduledEnd: '',
-    type: 'STANDARD', // 'STANDARD' | 'SWITCH' | 'MOTION'
+    type: 'STANDARD', // 'STANDARD' | 'SWITCH' | 'DIGIT'
     // For Switch
     switchConfig: {
       durationSeconds: 360,
@@ -163,7 +163,7 @@ function CreateTestPage() {
         scheduledEnd: testData.scheduledEnd ? new Date(testData.scheduledEnd).toISOString() : null,
         maxAttempts: maxAttempts ? parseInt(maxAttempts, 10) : null,
         attemptType,
-        questions: testData.type === 'STANDARD' ? questions : [], // Empty questions for Switch/Motion
+        questions: testData.type === 'STANDARD' ? questions : [], // Empty questions for Switch/Digit
 
         // Sync Switch Config Duration (only for SWITCH type)
         switchConfig: testData.type === 'SWITCH' ? {
@@ -213,7 +213,6 @@ function CreateTestPage() {
           >
             <option value="STANDARD">📝 Standard Test - Custom MCQ/Short Answer questions</option>
             <option value="SWITCH">🔄 AON Switch Challenge - Adaptive cognitive assessment</option>
-            <option value="MOTION">🧩 Motion Challenge - Sliding block planning puzzles</option>
             <option value="DIGIT">🔢 Digit Challenge - Mathematical expression puzzles</option>
           </select>
         </div>
@@ -241,7 +240,7 @@ function CreateTestPage() {
         )}
 
         {/* DETAILS SECTION */}
-        {(testData.type === 'SWITCH' || testData.type === 'MOTION' || activeTab === 'details') && (
+        {(testData.type === 'SWITCH' || testData.type === 'DIGIT' || activeTab === 'details') && (
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 space-y-4 animate-fadeIn">
             <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
             <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
@@ -251,7 +250,7 @@ function CreateTestPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
                 <input
                   type="number"
-                  min={testData.type === 'MOTION' || testData.type === 'SWITCH' ? "6" : "1"}
+                  min={testData.type === 'SWITCH' || testData.type === 'DIGIT' ? "6" : "1"}
                   className="w-full p-2 border rounded"
                   name="duration"
                   value={testData.duration}
@@ -308,12 +307,7 @@ function CreateTestPage() {
               </div>
             )}
 
-            {testData.type === 'MOTION' && (
-              <div className="bg-red-50 p-4 rounded text-sm text-red-800">
-                <h4 className="font-bold mb-1">Motion Challenge Configuration</h4>
-                <p>This test uses sliding block puzzles. 5 levels with 6×5 grid. Minimum duration: 6 minutes.</p>
-              </div>
-            )}
+
           </div>
         )}
 
