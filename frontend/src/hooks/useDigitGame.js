@@ -1,57 +1,120 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { DIGIT_LEVELS } from '../data/digitLevels';
-import { validateExpression, calculateLevelScore } from '../utils/digitEngine';
+import { generatePuzzleSet } from '../utils/digitGenerator';
+import { validateExpression } from '../utils/digitEngine';
 
 /**
- * Custom hook for managing Digit Challenge game state
+ * Custom hook for Digit Challenge with dynamic puzzle generation
+ * Generates 20 unique levels per test session
  */
-export function useDigitGame() {
+export function useDigitGame(userId, testStartTime) {
+    // ==========================================
+    // STATE MANAGEMENT
+    // ==========================================
     const [currentLevel, setCurrentLevel] = useState(1);
     const [selectedDigits, setSelectedDigits] = useState([]);
-    const [timeRemaining, setTimeRemaining] = useState(30);
+    const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes global timer
     const [totalScore, setTotalScore] = useState(0);
     const [levelScores, setLevelScores] = useState([]);
     const [gameStatus, setGameStatus] = useState('idle'); // idle | playing | completed | timeout
     const [feedback, setFeedback] = useState(null);
+    const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+    const [puzzleSet, setPuzzleSet] = useState(null);
     const [startTime, setStartTime] = useState(null);
 
     const timerRef = useRef(null);
 
+    // Metrics for submission
+    const metricsRef = useRef({
+        totalAttempts: 0,
+        correct: 0,
+        incorrect: 0,
+        reactionTimes: [],
+        maxLevel: 1,
+        violations: 0,
+        consecutiveFailures: 0
+    });
+
+    // Total number of levels
+    const TOTAL_LEVELS = 20;
+    const MAX_CONSECUTIVE_FAILURES = 3;
+
+    // ==========================================
+    // PUZZLE GENERATION
+    // ==========================================
+
+    /**
+     * Initialize puzzle set when game starts
+     */
+    const initializePuzzles = useCallback(() => {
+        if (!userId || !testStartTime) {
+            console.warn('Cannot generate puzzles without userId and testStartTime');
+            return null;
+        }
+
+        // Generate unique puzzle set for this test session
+        const puzzles = generatePuzzleSet(userId, testStartTime, TOTAL_LEVELS);
+        console.log('Generated puzzle set:', puzzles.length, 'levels');
+        return puzzles;
+    }, [userId, testStartTime, TOTAL_LEVELS]);
+
     // Get current level data
-    const levelData = DIGIT_LEVELS.find(l => l.id === currentLevel);
+    const levelData = puzzleSet ? puzzleSet[currentLevel - 1] : null;
 
     // Get available (non-disabled) digits
     const availableDigits = levelData
         ? levelData.availableDigits.filter(d => !levelData.disabledDigits.includes(d))
         : [];
 
-    // Start game
+    // ==========================================
+    // GAME CONTROL
+    // ==========================================
+
+    /**
+     * Start game - generates new puzzle set and resets state
+     */
     const startGame = useCallback(() => {
+        const puzzles = initializePuzzles();
+        if (!puzzles) return;
+
+        setPuzzleSet(puzzles);
         setCurrentLevel(1);
         setSelectedDigits([]);
         setTotalScore(0);
         setLevelScores([]);
         setGameStatus('playing');
         setFeedback(null);
-
-        const firstLevel = DIGIT_LEVELS[0];
-        setTimeRemaining(firstLevel.timeLimit);
+        setConsecutiveFailures(0);
+        setTimeRemaining(600); // 10 minutes
         setStartTime(Date.now());
-    }, []);
 
-    // Start level
+        // Reset metrics
+        metricsRef.current = {
+            totalAttempts: 0,
+            correct: 0,
+            incorrect: 0,
+            reactionTimes: [],
+            maxLevel: 1,
+            violations: 0,
+            consecutiveFailures: 0
+        };
+    }, [initializePuzzles]);
+
+    /**
+     * Start specific level
+     */
     const startLevel = useCallback((levelId) => {
-        const level = DIGIT_LEVELS.find(l => l.id === levelId);
-        if (!level) return;
+        if (!puzzleSet || levelId > TOTAL_LEVELS) return;
 
         setCurrentLevel(levelId);
         setSelectedDigits([]);
-        setTimeRemaining(level.timeLimit);
         setFeedback(null);
         setStartTime(Date.now());
-    }, []);
+    }, [puzzleSet, TOTAL_LEVELS]);
 
-    // Timer countdown
+    // ==========================================
+    // TIMER LOGIC
+    // ==========================================
+
     useEffect(() => {
         if (gameStatus !== 'playing') return;
 
@@ -71,58 +134,96 @@ export function useDigitGame() {
                 clearInterval(timerRef.current);
             }
         };
-    }, [gameStatus, currentLevel]);
+    }, [gameStatus]);
 
-    // Add digit to expression
+    // ==========================================
+    // DIGIT MANIPULATION
+    // ==========================================
+
+    /**
+     * Add digit to expression
+     */
     const addDigit = useCallback((digit) => {
-        if (selectedDigits.length >= levelData.slots) return;
+        if (!levelData || selectedDigits.length >= levelData.slots) return;
         if (selectedDigits.includes(digit)) return; // Prevent duplicates
 
         setSelectedDigits([...selectedDigits, digit]);
     }, [selectedDigits, levelData]);
 
-    // Remove last digit
+    /**
+     * Remove last digit
+     */
     const removeLast = useCallback(() => {
         setSelectedDigits(selectedDigits.slice(0, -1));
     }, [selectedDigits]);
 
-    // Clear all digits
+    /**
+     * Clear all digits
+     */
     const clearAll = useCallback(() => {
         setSelectedDigits([]);
         setFeedback(null);
     }, []);
 
-    // Submit answer
+    // ==========================================
+    // ANSWER SUBMISSION
+    // ==========================================
+
+    /**
+     * Submit answer for current level
+     */
     const submitAnswer = useCallback(() => {
+        if (!levelData || !startTime) return;
+
         const timeTaken = (Date.now() - startTime) / 1000;
         const validation = validateExpression(selectedDigits, levelData);
 
-        // Validation runs silently - no feedback shown during test
+        // Update metrics
+        metricsRef.current.totalAttempts++;
+        metricsRef.current.reactionTimes.push(timeTaken);
 
         if (validation.valid) {
-            // Calculate score
+            // Correct answer
+            metricsRef.current.correct++;
             const score = calculateLevelScore(currentLevel, timeTaken);
             setLevelScores([...levelScores, score]);
             setTotalScore(totalScore + score);
+            setConsecutiveFailures(0);
 
-            // Check if game completed
-            if (currentLevel === DIGIT_LEVELS.length) {
+            // Update max level
+            if (currentLevel > metricsRef.current.maxLevel) {
+                metricsRef.current.maxLevel = currentLevel;
+            }
+
+            // Check if test completed
+            if (currentLevel === TOTAL_LEVELS) {
                 setGameStatus('completed');
                 clearInterval(timerRef.current);
             } else {
-                // Auto-advance to next level after 500ms
+                // Auto-advance to next level
                 setTimeout(() => {
                     startLevel(currentLevel + 1);
                 }, 500);
             }
         } else {
-            // Wrong answer - record 0 for this level and move on
+            // Wrong answer
+            metricsRef.current.incorrect++;
+            const newFailures = consecutiveFailures + 1;
+            setConsecutiveFailures(newFailures);
+            metricsRef.current.consecutiveFailures = newFailures;
+
+            // Record 0 score for failed level
             setLevelScores([...levelScores, 0]);
 
-            if (currentLevel === DIGIT_LEVELS.length) {
+            // Check for consecutive failure termination
+            if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
+                setGameStatus('terminated');
+                clearInterval(timerRef.current);
+            } else if (currentLevel === TOTAL_LEVELS) {
                 setGameStatus('completed');
                 clearInterval(timerRef.current);
             } else {
+                // Continue to next level
                 setTimeout(() => {
                     startLevel(currentLevel + 1);
                 }, 500);
@@ -130,25 +231,33 @@ export function useDigitGame() {
         }
 
         return validation;
-    }, [selectedDigits, levelData, currentLevel, startTime, levelScores, totalScore, startLevel]);
+    }, [selectedDigits, levelData, currentLevel, startTime, levelScores, totalScore, consecutiveFailures, startLevel, TOTAL_LEVELS, MAX_CONSECUTIVE_FAILURES]);
 
-    // Handle timeout - move to next level
-    useEffect(() => {
-        if (gameStatus === 'timeout') {
-            // Record 0 score for timeout
-            setLevelScores([...levelScores, 0]);
+    // ==========================================
+    // SCORE CALCULATION
+    // ==========================================
 
-            // Move to next level after 500ms
-            setTimeout(() => {
-                if (currentLevel < DIGIT_LEVELS.length) {
-                    setGameStatus('playing');
-                    startLevel(currentLevel + 1);
-                } else {
-                    setGameStatus('completed');
-                }
-            }, 500);
-        }
-    }, [gameStatus, currentLevel, levelScores, startLevel]);
+    /**
+     * Calculate score for completed level
+     * Formula: (Level)² / TimeTaken * SpeedMultiplier
+     */
+    function calculateLevelScore(levelId, timeTakenSeconds) {
+        if (timeTakenSeconds <= 0) return 0;
+
+        const baseScore = Math.pow(levelId, 2) / timeTakenSeconds;
+
+        // Speed bonus for fast completion
+        let speedMultiplier = 1.0;
+        if (timeTakenSeconds < 5) speedMultiplier = 1.5;
+        else if (timeTakenSeconds < 10) speedMultiplier = 1.2;
+
+        const finalScore = baseScore * speedMultiplier;
+        return Math.round(finalScore * 100) / 100;
+    }
+
+    // ==========================================
+    // RETURN PUBLIC API
+    // ==========================================
 
     return {
         // State
@@ -161,6 +270,10 @@ export function useDigitGame() {
         feedback,
         levelData,
         availableDigits,
+        consecutiveFailures,
+        maxConsecutiveFailures: MAX_CONSECUTIVE_FAILURES,
+        totalLevels: TOTAL_LEVELS,
+        metricsRef,
 
         // Actions
         startGame,

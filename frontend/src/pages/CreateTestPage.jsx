@@ -249,7 +249,7 @@ function CreateTestPage() {
               >
                 <option value="STANDARD">📝 Standard Test (MCQ/Short Answer)</option>
                 <option value="SWITCH">🔄 AON Switch Challenge (Cognitive Game)</option>
-                {/* Future options can be easily added here */}
+                <option value="DIGIT">🧮 AON Digit Challenge (Mathematical Puzzle)</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
@@ -258,21 +258,25 @@ function CreateTestPage() {
           </div>
 
           {/* Dynamic Info Card */}
-          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD'
-            ? 'bg-blue-50 border-blue-200 text-blue-900'
-            : 'bg-purple-50 border-purple-200 text-purple-900'
+          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD' ? 'bg-blue-50 border-blue-200 text-blue-900' :
+              testData.type === 'SWITCH' ? 'bg-purple-50 border-purple-200 text-purple-900' :
+                'bg-green-50 border-green-200 text-green-900'
             }`}>
             <div className="text-3xl shrink-0">
-              {testData.type === 'STANDARD' ? '📝' : '🔄'}
+              {testData.type === 'STANDARD' ? '📝' : testData.type === 'SWITCH' ? '🔄' : '🧮'}
             </div>
             <div>
               <h3 className="font-bold text-lg mb-1">
-                {testData.type === 'STANDARD' ? 'Standard Assessment' : 'AON Switch Challenge'}
+                {testData.type === 'STANDARD' ? 'Standard Assessment' :
+                  testData.type === 'SWITCH' ? 'AON Switch Challenge' :
+                    'AON Digit Challenge'}
               </h3>
               <p className="text-sm opacity-90 leading-relaxed">
                 {testData.type === 'STANDARD'
                   ? 'Create a traditional quiz with custom questions. Supports Multiple Choice and Short Answer formats. Perfect for knowledge verification and exams.'
-                  : 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'}
+                  : testData.type === 'SWITCH'
+                    ? 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'
+                    : 'An advanced mathematical puzzle challenge with 20 progressive levels. Tests numerical reasoning and expression-building skills using dynamically generated digit puzzles. Each test session creates unique puzzles with increasing difficulty.'}
               </p>
             </div>
           </div>

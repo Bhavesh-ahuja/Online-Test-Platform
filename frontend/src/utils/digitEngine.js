@@ -153,33 +153,4 @@ export function validateExpression(userDigits, levelConfig) {
     };
 }
 
-/**
- * Calculate score for completed level
- * Formula: (Level)² / TimeTaken
- * @param {number} levelId - Level number (1-5)
- * @param {number} timeTakenSeconds - Time taken in seconds
- * @returns {number} - Score rounded to 2 decimals
- */
-export function calculateLevelScore(levelId, timeTakenSeconds) {
-    if (timeTakenSeconds <= 0) {
-        return 0;
-    }
-
-    const levelSquared = Math.pow(levelId, 2);
-    const score = levelSquared / timeTakenSeconds;
-
-    return Math.round(score * 100) / 100;
-}
-
-/**
- * Calculate minimum time to get target score
- * @param {number} levelId - Level number
- * @param {number} targetScore - Desired score
- * @returns {number} - Time needed in seconds
- */
-export function getTimeForScore(levelId, targetScore) {
-    if (targetScore <= 0) return Infinity;
-    return Math.pow(levelId, 2) / targetScore;
-}
-
 export { extractOperators, buildExpression, evaluateLeftToRight };
