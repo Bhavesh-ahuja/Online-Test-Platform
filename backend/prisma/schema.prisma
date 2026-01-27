@@ -131,6 +131,7 @@ enum TestType {
   STANDARD
   SWITCH
   MOTION
+  DIGIT
 }
 
 model SwitchChallengeConfig {

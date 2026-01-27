@@ -214,6 +214,7 @@ function CreateTestPage() {
             <option value="STANDARD">📝 Standard Test - Custom MCQ/Short Answer questions</option>
             <option value="SWITCH">🔄 AON Switch Challenge - Adaptive cognitive assessment</option>
             <option value="MOTION">🧩 Motion Challenge - Sliding block planning puzzles</option>
+            <option value="DIGIT">🔢 Digit Challenge - Mathematical expression puzzles</option>
           </select>
         </div>
 
