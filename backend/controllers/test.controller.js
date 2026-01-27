@@ -1,5 +1,6 @@
 // test.controller.js
 import TestService from '../services/test.service.js';
+import PdfService from '../services/pdf.service.js';
 import catchAsync from '../utils/catchAsync.js';
 import prisma from '../lib/prisma.js';
 
@@ -67,7 +68,7 @@ export const submitTest = catchAsync(async (req, res) => {
 ========================= */
 export const getTestResult = catchAsync(async (req, res) => {
   const { submissionId } = req.params;
-   const user = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: req.user.userId },
     select: { role: true }
   });
@@ -113,14 +114,14 @@ export const deleteTest = catchAsync(async (req, res) => {
 
 
 export const uploadTestPDF = catchAsync(async (req, res) => {
-  const result = await TestService.uploadTestPDF(req.file);
+  const result = await PdfService.uploadTestPDF(req.file);
   res.json(result);
 });
 
 // Export Test Results (PDF)
 export const exportTestResultsPDF = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const pdfStream = await TestService.exportTestResultsPDF(id);
+  const pdfStream = await PdfService.exportTestResultsPDF(id);
 
   // Set Headers for Download
   res.setHeader('Content-Type', 'application/pdf');
