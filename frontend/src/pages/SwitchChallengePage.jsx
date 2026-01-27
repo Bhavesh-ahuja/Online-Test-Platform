@@ -71,12 +71,16 @@ export default function SwitchChallengePage() {
 
     // Refs
     const examSessionTokenRef = useRef(null);
+    const isSubmittingRef = useRef(false);
+    const isInitializedRef = useRef(false);
 
     // --- SUBMISSION LOGIC ---
     const handleGameOver = useCallback(async (reason) => {
-        if (submitting) return;
-        endGame(); // Stop game logic
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
         setSubmitting(true);
+
+        endGame(); // Stop game logic
         setSubmissionReason(reason);
 
         // Simulated jitter
@@ -115,26 +119,32 @@ export default function SwitchChallengePage() {
             });
 
             if (response.ok) {
-                setSubmitting(false);
+                setSubmitting(false); // UI state
+                // Keep ref true to prevent re-submit
                 setIsSubmissionModalOpen(true);
             } else {
                 const err = await response.json();
                 console.error("Submission failed", err);
                 alert(`Submission failed: ${err.message || 'Unknown error'}. Please try again.`);
                 setSubmitting(false);
+                isSubmittingRef.current = false; // Allow retry on failure
             }
         } catch (e) {
             console.error("Network error during submission", e);
             alert("Network error. Please check connection and try again.");
             setSubmitting(false);
+            isSubmittingRef.current = false; // Allow retry on failure
         }
-    }, [submitting, endGame, score, id, metricsRef]);
+    }, [endGame, score, id, metricsRef]);
 
     // --- INIT & CONFIG ---
     useEffect(() => {
         let mounted = true;
 
         const initGame = async () => {
+            if (isInitializedRef.current) return;
+            isInitializedRef.current = true;
+
             try {
                 // 1. Start Test Session (User Token needed)
                 const startRes = await authFetch(`/api/tests/${id}/start`, { method: 'POST' });

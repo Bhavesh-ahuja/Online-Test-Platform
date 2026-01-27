@@ -4,14 +4,20 @@ import { API_BASE_URL } from '../../config';
 export const testsApi = {
     getAll: async () => {
         const res = await authFetch('/api/tests');
-        if (!res.ok) throw new Error('Failed to fetch tests');
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to fetch tests');
+        }
         return res.json();
     },
 
     getById: async (id, token) => {
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch(`${API_BASE_URL}/api/tests/${id}`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch test details');
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to fetch test details');
+        }
         return res.json();
     },
 
@@ -21,7 +27,10 @@ export const testsApi = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(testData),
         });
-        if (!res.ok) throw new Error('Failed to create test');
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to create test');
+        }
         return res.json();
     },
 
@@ -30,8 +39,8 @@ export const testsApi = {
             method: 'POST',
         });
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'Start failed');
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || err.error || 'Start failed');
         }
         return res.json();
     },
@@ -46,7 +55,10 @@ export const testsApi = {
             },
             body: JSON.stringify(data),
         });
-        if (!res.ok) throw new Error('Autosave failed');
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Autosave failed');
+        }
         return res.json();
     },
 
@@ -60,8 +72,8 @@ export const testsApi = {
             body: JSON.stringify(data),
         });
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'Submission failed');
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || err.error || 'Submission failed');
         }
         return res.json();
     }
