@@ -233,29 +233,45 @@ function CreateTestPage() {
           </div>
         )}
 
-        {/* TYPE SELECTION */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <label className="block text-gray-700 font-bold mb-4">Select Assessment Type</label>
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => setTestData({ ...testData, type: 'STANDARD' })}
-              className={`flex-1 py-4 px-6 rounded-xl border-2 text-left transition-all ${testData.type === 'STANDARD' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-            >
-              <div className="font-bold text-lg text-gray-800 mb-1">📝 Standard Test</div>
-              <div className="text-sm text-gray-500">Create custom Multiple Choice or Short Answer questions.</div>
-            </button>
+        {/* TYPE SELECTION (Dropdown + Info Card) */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 space-y-4">
 
-            <button
-              type="button"
-              onClick={() => setTestData({ ...testData, type: 'SWITCH' })}
-              className={`flex-1 py-4 px-6 rounded-xl border-2 text-left transition-all ${testData.type === 'SWITCH' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}
-            >
-              <div className="font-bold text-lg text-gray-800 mb-1">🔄 AON Switch Challenge</div>
-              <div className="text-sm text-gray-500">Adaptive cognitive assessment. Automatically generated puzzles.</div>
-            </button>
+          <div>
+            <label className="block text-gray-700 font-bold mb-2">Assessment Type</label>
+            <div className="relative">
+              <select
+                value={testData.type}
+                onChange={(e) => setTestData({ ...testData, type: e.target.value })}
+                className="w-full appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 pr-10 hover:bg-white transition-colors cursor-pointer"
+              >
+                <option value="STANDARD">📝 Standard Test (MCQ/Short Answer)</option>
+                <option value="SWITCH">🔄 AON Switch Challenge (Cognitive Game)</option>
+                {/* Future options can be easily added here */}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Info Card */}
+          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD'
+              ? 'bg-blue-50 border-blue-200 text-blue-900'
+              : 'bg-purple-50 border-purple-200 text-purple-900'
+            }`}>
+            <div className="text-3xl shrink-0">
+              {testData.type === 'STANDARD' ? '📝' : '🔄'}
+            </div>
+            <div>
+              <h3 className="font-bold text-lg mb-1">
+                {testData.type === 'STANDARD' ? 'Standard Assessment' : 'AON Switch Challenge'}
+              </h3>
+              <p className="text-sm opacity-90 leading-relaxed">
+                {testData.type === 'STANDARD'
+                  ? 'Create a traditional quiz with custom questions. Supports Multiple Choice and Short Answer formats. Perfect for knowledge verification and exams.'
+                  : 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'}
+              </p>
+            </div>
           </div>
         </div>
 
