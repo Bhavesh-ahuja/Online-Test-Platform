@@ -1,31 +1,33 @@
 // src/utils/authFetch.js
 import { API_BASE_URL } from "../../config";
 
-let isRedirecting = false;
-
+/**
+ * Authenticated fetch wrapper that adds JWT token to requests.
+ * Does NOT auto-logout on 401 - components should handle auth failures themselves.
+ */
 export async function authFetch(path, options = {}) {
   const token = localStorage.getItem("token");
 
+  console.log('[authFetch] Path:', path);
+  console.log('[authFetch] Token exists:', !!token);
+  console.log('[authFetch] Token preview:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
+
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  console.log('[authFetch] Headers:', headers);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: token ? `Bearer ${token}` : undefined,
-    },
+    headers,
   });
 
-  // 🔴 Centralized auth failure detection
-  if (response.status === 401 && !isRedirecting) {
-    isRedirecting = true;
-
-    // Graceful: allow current promise chain to continue
-    setTimeout(() => {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login?reason=session_expired";
-
-    }, 0);
-  }
+  console.log('[authFetch] Response status:', response.status);
 
   return response;
 }
