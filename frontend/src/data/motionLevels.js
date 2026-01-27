@@ -1,132 +1,164 @@
-// Motion Challenge Level Definitions
-// Grid: 6 rows × 5 columns (company-standard)
-// Exit: Right edge at column 4
-
-const GRID_ROWS = 6;
-const GRID_COLS = 5;
-
-/**
- * Level Data Structure:
- * - id: Level number
- * - minMoves: Precomputed optimal solution length (source of truth for scoring)
- * - exit: {x, y} position where hero rightmost cell must align
- * - blocks: Array of block objects
- *   - id: Unique identifier
- *   - x, y: Top-left position (0-indexed)
- *   - width, height: Block dimensions
- *   - type: 'hero' | 'plastic' | 'rock'
- *   - orientation: 'horizontal' | 'vertical' | null (for rocks)
+/*
+ * Professional Motion Challenge Levels
+ * Company-Grade Cognitive Assessment
+ * 
+ * CORE ENTITIES:
+ * - Red Ball (1×1): Moves UP/DOWN/LEFT/RIGHT, must reach black hole
+ * - Plastic Blocks: Rectangular sliders (vertical/horizontal orientation)
+ * - Rocks (1×1): Immovable obstacles
+ * 
+ * DESIGN RULES:
+ * - Ball CANNOT move for first 2-3 moves (blocked by plastic/rocks)
+ * - 50%+ of solution involves moving blocks, not ball
+ * - No direct path to hole initially
+ * - Deceptive moves that create dead ends
  */
 
+export const GRID_ROWS = 6;
+export const GRID_COLS = 5;
+
+export const BLOCK_TYPES = {
+    BALL: 'ball',     // 1×1 red ball (hero)
+    PLASTIC: 'plastic', // Rectangular sliders
+    ROCK: 'rock'      // 1×1 immovable
+};
+
 export const MOTION_LEVELS = [
-    // Level 1: Beginner - Simple path clearing
+    // Level 1: Introduction - Solvable with 6-7 setup moves
     {
         id: 1,
-        minMoves: 12,
-        exit: { x: 4, y: 2 },
+        minMoves: 6,
+        hole: { x: 4, y: 2 }, // Right side, middle row
         blocks: [
-            // Hero block (red, must reach exit)
-            { id: 'hero', x: 0, y: 2, width: 2, height: 1, type: 'hero', orientation: 'horizontal' },
+            // RED BALL (1×1) - boxed in top-left (3 sides blocked)
+            { id: 'ball', type: 'ball', x: 0, y: 0, width: 1, height: 1 },
 
-            // Vertical blockers
-            { id: 'v1', x: 2, y: 1, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v2', x: 3, y: 0, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
+            // Vertical blocker RIGHT of ball (blocks direct path)
+            { id: 'v1', type: 'plastic', x: 1, y: 0, width: 1, height: 2 },
 
-            // Horizontal blockers
-            { id: 'h1', x: 1, y: 3, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
+            // Horizontal blocker BELOW ball
+            { id: 'h1', type: 'plastic', x: 0, y: 1, width: 2, height: 1 },
 
-            // Rocks (immovable)
-            { id: 'r1', x: 0, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r2', x: 4, y: 5, width: 1, height: 1, type: 'rock', orientation: null },
+            // Vertical piece middle (must move to clear path)
+            { id: 'v2', type: 'plastic', x: 2, y: 1, width: 1, height: 2 },
+
+            // Horizontal piece bottom (can move to unlock v2)
+            { id: 'h2', type: 'plastic', x: 1, y: 3, width: 2, height: 1 },
+
+            // Rock in corner (immovable obstacle)
+            { id: 'r1', type: 'rock', x: 0, y: 5, width: 1, height: 1 }
         ]
     },
 
-    // Level 2: Intermediate - Multiple dependencies
+    // Level 2: Planning Required - Ball needs multiple block moves before path opens
     {
         id: 2,
-        minMoves: 18,
-        exit: { x: 4, y: 3 },
+        minMoves: 11,
+        hole: { x: 4, y: 4 }, // Bottom-right corner
         blocks: [
-            { id: 'hero', x: 0, y: 3, width: 2, height: 1, type: 'hero', orientation: 'horizontal' },
+            // Ball trapped in middle-left
+            { id: 'ball', type: 'ball', x: 0, y: 2, width: 1, height: 1 },
 
-            { id: 'v1', x: 2, y: 2, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v2', x: 3, y: 1, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
-            { id: 'v3', x: 4, y: 0, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
+            // Dense vertical wall on right side of ball
+            { id: 'v1', type: 'plastic', x: 1, y: 1, width: 1, height: 3 },
 
-            { id: 'h1', x: 0, y: 1, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h2', x: 1, y: 4, width: 3, height: 1, type: 'plastic', orientation: 'horizontal' },
+            // Horizontal blockers creating layers
+            { id: 'h1', type: 'plastic', x: 0, y: 1, width: 2, height: 1 },
+            { id: 'h2', type: 'plastic', x: 2, y: 3, width: 2, height: 1 },
 
-            { id: 'r1', x: 0, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r2', x: 1, y: 5, width: 1, height: 1, type: 'rock', orientation: null },
+            // Vertical piece near hole
+            { id: 'v2', type: 'plastic', x: 3, y: 2, width: 1, height: 3 },
+            { id: 'v3', type: 'plastic', x: 4, y: 1, width: 1, height: 3 },
+
+            // Strategic rocks blocking direct paths
+            { id: 'r1', type: 'rock', x: 2, y: 0, width: 1, height: 1 },
+            { id: 'r2', type: 'rock', x: 0, y: 5, width: 1, height: 1 },
+            { id: 'r3', type: 'rock', x: 4, y: 0, width: 1, height: 1 }
         ]
     },
 
-    // Level 3: Advanced - Deceptive moves required
+    // Level 3: Forced Reversals - Deceptive moves that create dead ends
     {
         id: 3,
-        minMoves: 24,
-        exit: { x: 4, y: 2 },
+        minMoves: 14,
+        hole: { x: 2, y: 5 }, // Bottom-middle
         blocks: [
-            { id: 'hero', x: 1, y: 2, width: 2, height: 1, type: 'hero', orientation: 'horizontal' },
+            // Ball in top-right area, far from hole
+            { id: 'ball', type: 'ball', x: 4, y: 1, width: 1, height: 1 },
 
-            { id: 'v1', x: 0, y: 1, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v2', x: 2, y: 0, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v3', x: 3, y: 3, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
-            { id: 'v4', x: 4, y: 0, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
+            // Complex vertical barriers
+            { id: 'v1', type: 'plastic', x: 0, y: 0, width: 1, height: 3 },
+            { id: 'v2', type: 'plastic', x: 2, y: 1, width: 1, height: 3 },
+            { id: 'v3', type: 'plastic', x: 3, y: 0, width: 1, height: 2 },
 
-            { id: 'h1', x: 1, y: 3, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h2', x: 0, y: 4, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
+            // Horizontal maze pieces
+            { id: 'h1', type: 'plastic', x: 1, y: 3, width: 2, height: 1 },
+            { id: 'h2', type: 'plastic', x: 3, y: 4, width: 2, height: 1 },
+            { id: 'h3', type: 'plastic', x: 0, y: 5, width: 2, height: 1 },
 
-            { id: 'r1', x: 0, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r2', x: 2, y: 5, width: 1, height: 1, type: 'rock', orientation: null },
+            // Vertical piece blocking hole area
+            { id: 'v4', type: 'plastic', x: 1, y: 4, width: 1, height: 2 },
+
+            // Strategic rocks forcing long detours
+            { id: 'r1', type: 'rock', x: 4, y: 0, width: 1, height: 1 },
+            { id: 'r2', type: 'rock', x: 0, y: 4, width: 1, height: 1 },
+            { id: 'r3', type: 'rock', x: 3, y: 5, width: 1, height: 1 }
         ]
     },
 
-    // Level 4: Expert - High dependency chain
+    // Level 4: Tight Constraints - Very few free cells, each move critical
     {
         id: 4,
-        minMoves: 28,
-        exit: { x: 4, y: 1 },
+        minMoves: 16,
+        hole: { x: 1, y: 0 }, // Top area, opposite from ball
         blocks: [
-            { id: 'hero', x: 0, y: 1, width: 2, height: 1, type: 'hero', orientation: 'horizontal' },
+            // Ball in bottom-right corner
+            { id: 'ball', type: 'ball', x: 4, y: 5, width: 1, height: 1 },
 
-            { id: 'v1', x: 1, y: 2, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
-            { id: 'v2', x: 2, y: 0, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v3', x: 3, y: 2, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
-            { id: 'v4', x: 4, y: 3, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
+            // Dense vertical barriers
+            { id: 'v1', type: 'plastic', x: 0, y: 1, width: 1, height: 3 },
+            { id: 'v2', type: 'plastic', x: 2, y: 0, width: 1, height: 3 },
+            { id: 'v3', type: 'plastic', x: 3, y: 3, width: 1, height: 3 },
+            { id: 'v4', type: 'plastic', x: 4, y: 0, width: 1, height: 2 },
 
-            { id: 'h1', x: 2, y: 2, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h2', x: 0, y: 3, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h3', x: 0, y: 5, width: 3, height: 1, type: 'plastic', orientation: 'horizontal' },
+            // Complex horizontal pieces
+            { id: 'h1', type: 'plastic', x: 0, y: 0, width: 2, height: 1 },
+            { id: 'h2', type: 'plastic', x: 1, y: 4, width: 2, height: 1 },
+            { id: 'h3', type: 'plastic', x: 3, y: 2, width: 2, height: 1 },
 
-            { id: 'r1', x: 0, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r2', x: 4, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
+            // Rocks creating narrow passages
+            { id: 'r1', type: 'rock', x: 1, y: 1, width: 1, height: 1 },
+            { id: 'r2', type: 'rock', x: 2, y: 5, width: 1, height: 1 },
+            { id: 'r3', type: 'rock', x: 4, y: 2, width: 1, height: 1 }
         ]
     },
 
-    // Level 5: Master - Maximum complexity
+    // Level 5: Expert - Near-optimal solution required, punishes greedy ball moves
     {
         id: 5,
-        minMoves: 35,
-        exit: { x: 4, y: 3 },
+        minMoves: 19,
+        hole: { x: 0, y: 3 }, // Middle-left, forces complex maneuvering
         blocks: [
-            { id: 'hero', x: 0, y: 3, width: 2, height: 1, type: 'hero', orientation: 'horizontal' },
+            // Ball far from hole in top-right
+            { id: 'ball', type: 'ball', x: 4, y: 0, width: 1, height: 1 },
 
-            { id: 'v1', x: 0, y: 1, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v2', x: 1, y: 4, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v3', x: 2, y: 0, width: 1, height: 3, type: 'plastic', orientation: 'vertical' },
-            { id: 'v4', x: 3, y: 1, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
-            { id: 'v5', x: 4, y: 4, width: 1, height: 2, type: 'plastic', orientation: 'vertical' },
+            // Maximum vertical barriers creating maze
+            { id: 'v1', type: 'plastic', x: 1, y: 0, width: 1, height: 3 },
+            { id: 'v2', type: 'plastic', x: 2, y: 2, width: 1, height: 3 },
+            { id: 'v3', type: 'plastic', x: 3, y: 1, width: 1, height: 3 },
+            { id: 'v4', type: 'plastic', x: 0, y: 4, width: 1, height: 2 },
 
-            { id: 'h1', x: 1, y: 0, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h2', x: 0, y: 4, width: 2, height: 1, type: 'plastic', orientation: 'horizontal' },
-            { id: 'h3', x: 2, y: 5, width: 3, height: 1, type: 'plastic', orientation: 'horizontal' },
+            // Intricate horizontal pieces
+            { id: 'h1', type: 'plastic', x: 2, y: 0, width: 2, height: 1 },
+            { id: 'h2', type: 'plastic', x: 0, y: 1, width: 2, height: 1 },
+            { id: 'h3', type: 'plastic', x: 3, y: 4, width: 2, height: 1 },
+            { id: 'h4', type: 'plastic', x: 1, y: 5, width: 3, height: 1 },
 
-            { id: 'r1', x: 0, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r2', x: 3, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
-            { id: 'r3', x: 4, y: 0, width: 1, height: 1, type: 'rock', orientation: null },
+            // Strategic rock placement forcing backtracking
+            { id: 'r1', type: 'rock', x: 0, y: 0, width: 1, height: 1 },
+            { id: 'r2', type: 'rock', x: 4, y: 4, width: 1, height: 1 },
+            { id: 'r3', type: 'rock', x: 2, y: 5, width: 1, height: 1 },
+            { id: 'r4', type: 'rock', x: 4, y: 1, width: 1, height: 1 }
         ]
     }
 ];
-
-export { GRID_ROWS, GRID_COLS };

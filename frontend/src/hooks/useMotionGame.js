@@ -16,6 +16,8 @@ export function useMotionGame() {
     // Core game state
     const [level, setLevel] = useState(1);
     const [blocks, setBlocks] = useState([]);
+    const [grid, setGrid] = useState(null);
+    const [hole, setHole] = useState(null);
     const [moves, setMoves] = useState(0);
     const [score, setScore] = useState(0);
     const [isGameOver, setIsGameOver] = useState(false);
@@ -42,6 +44,8 @@ export function useMotionGame() {
         const levelData = loadLevel(1);
         setLevel(1);
         setBlocks(levelData.blocks);
+        setGrid(levelData.grid);
+        setHole(levelData.hole);
         setMoves(0);
         setScore(0);
         setIsGameOver(false);
@@ -68,28 +72,30 @@ export function useMotionGame() {
     const handleMove = useCallback((blockId, direction) => {
         if (isGameOver || isLevelComplete) return false;
 
-        const gameState = { blocks, moves };
+        const gameState = { blocks, grid, hole, moves };
         const newState = attemptMove(gameState, blockId, direction);
 
         if (newState) {
             // Valid move
             setBlocks(newState.blocks);
+            setGrid(newState.grid);
             setMoves(newState.moves);
             metricsRef.current.totalMoves++;
 
             // Check win condition
-            const heroBlock = newState.blocks.find(b => b.type === 'hero');
+            const ballBlock = newState.blocks.find(b => b.type === 'ball');
             const levelData = loadLevel(level);
 
-            if (checkWinCondition(heroBlock, levelData.exit)) {
+            // Check for winning move
+            if (newState.isWinningMove || checkWinCondition(ballBlock, levelData.hole)) {
                 handleLevelComplete();
             }
 
             return true;
         }
 
-        return false; // Invalid move - block snaps back
-    }, [blocks, moves, level, isGameOver, isLevelComplete]);
+        return false; // Invalid move
+    }, [blocks, grid, moves, hole, level, isGameOver, isLevelComplete]);
 
     /**
      * Handle level completion
@@ -132,6 +138,8 @@ export function useMotionGame() {
 
         setLevel(nextLevel);
         setBlocks(levelData.blocks);
+        setGrid(levelData.grid);
+        setHole(levelData.hole);
         setMoves(0);
         setIsLevelComplete(false);
         setActiveBlockId(null);
@@ -148,6 +156,8 @@ export function useMotionGame() {
     const resetLevel = useCallback(() => {
         const levelData = loadLevel(level);
         setBlocks(levelData.blocks);
+        setGrid(levelData.grid);
+        setHole(levelData.hole);
         setMoves(0);
         setIsLevelComplete(false);
         setActiveBlockId(null);
@@ -161,30 +171,12 @@ export function useMotionGame() {
         setIsGameOver(true);
     }, []);
 
-    /**
-     * Multi-cell drag decomposition
-     * Attempts to move block multiple cells by breaking into single-cell moves
-     * @param {string} blockId - Block to move
-     * @param {string} direction - Direction to move
-     * @param {number} cells - Number of cells to move
-     * @returns {number} - Number of successful moves
-     */
-    const attemptMultiCellMove = useCallback((blockId, direction, cells) => {
-        let successfulMoves = 0;
-        for (let i = 0; i < cells; i++) {
-            if (handleMove(blockId, direction)) {
-                successfulMoves++;
-            } else {
-                break; // Stop on first invalid move
-            }
-        }
-        return successfulMoves;
-    }, [handleMove]);
-
     return {
         // State
         level,
         blocks,
+        grid,
+        hole,
         moves,
         score,
         isGameOver,
@@ -195,7 +187,6 @@ export function useMotionGame() {
         // Actions
         startGame,
         handleMove,
-        attemptMultiCellMove,
         resetLevel,
         endGame,
         setActiveBlockId,

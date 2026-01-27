@@ -1,7 +1,10 @@
-// Motion Challenge Pure Game Engine
-// Handles all game logic without React state dependencies
+// Motion Challenge Pure Game Engine - GRID-CENTRIC
+// Grid is the single source of truth
 
-import { GRID_ROWS, GRID_COLS, MOTION_LEVELS } from '../data/motionLevels.js';
+import { MOTION_LEVELS } from '../data/motionLevels.js';
+
+export const GRID_ROWS = 6;
+export const GRID_COLS = 5;
 
 // Direction constants
 export const DIRECTIONS = {
@@ -25,161 +28,219 @@ const getDirectionVector = (direction) => {
 };
 
 /**
- * Check if a block's movement direction is valid for its orientation
- * Horizontal blocks can only move LEFT/RIGHT
- * Vertical blocks can only move UP/DOWN
- * Rocks cannot move
+ * Initialize empty grid
  */
-export const isDirectionAllowedForBlock = (block, direction) => {
-    if (block.type === 'rock') return false;
+export const createEmptyGrid = () => {
+    return Array(GRID_ROWS).fill(null).map(() =>
+        Array(GRID_COLS).fill(null)
+    );
+};
 
+/**
+ * Populate grid from block definitions
+ * Grid cells store block IDs for occupancy tracking
+ */
+export const populateGrid = (blocks) => {
+    const grid = createEmptyGrid();
+
+    for (const block of blocks) {
+        for (let dy = 0; dy < block.height; dy++) {
+            for (let dx = 0; dx < block.width; dx++) {
+                const y = block.y + dy;
+                const x = block.x + dx;
+                if (y >= 0 && y < GRID_ROWS && x >= 0 && x < GRID_COLS) {
+                    grid[y][x] = block.id;
+                }
+            }
+        }
+    }
+
+    return grid;
+};
+
+/**
+ * Get block metadata by ID
+ */
+export const getBlockById = (blocks, blockId) => {
+    return blocks.find(b => b.id === blockId);
+};
+
+/**
+ * Get leading-edge cells for a block moving in direction
+ */
+const getLeadingEdgeCells = (block, direction) => {
+    const cells = [];
+
+    switch (direction) {
+        case DIRECTIONS.LEFT:
+            for (let dy = 0; dy < block.height; dy++) {
+                cells.push({ x: block.x - 1, y: block.y + dy });
+            }
+            break;
+        case DIRECTIONS.RIGHT:
+            for (let dy = 0; dy < block.height; dy++) {
+                cells.push({ x: block.x + block.width, y: block.y + dy });
+            }
+            break;
+        case DIRECTIONS.UP:
+            for (let dx = 0; dx < block.width; dx++) {
+                cells.push({ x: block.x + dx, y: block.y - 1 });
+            }
+            break;
+        case DIRECTIONS.DOWN:
+            for (let dx = 0; dx < block.width; dx++) {
+                cells.push({ x: block.x + dx, y: block.y + block.height });
+            }
+            break;
+    }
+
+    return cells;
+};
+
+/**
+ * BALL MOVEMENT VALIDATION
+ * Ball is NOT a block - separate logic path
+ */
+export const validateBallMove = (grid, ball, direction, holePosition) => {
+    const { x, y } = ball;
+    const { dx, dy } = getDirectionVector(direction);
+
+    const newX = x + dx;
+    const newY = y + dy;
+
+    // Bounds check
+    if (newX < 0 || newX >= GRID_COLS || newY < 0 || newY >= GRID_ROWS) {
+        return { valid: false, reason: 'OUT_OF_BOUNDS' };
+    }
+
+    // SPECIAL: Allow ball to enter hole
+    if (newX === holePosition.x && newY === holePosition.y) {
+        return { valid: true, isWinningMove: true };
+    }
+
+    // Check if target cell is empty (grid-based check)
+    if (grid[newY][newX] !== null) {
+        return { valid: false, reason: 'CELL_OCCUPIED' };
+    }
+
+    return { valid: true, isWinningMove: false };
+};
+
+/**
+ * BLOCK MOVEMENT VALIDATION
+ * Blocks are orientation-locked
+ */
+export const validateBlockMove = (grid, blocks, blockId, direction) => {
+    const block = getBlockById(blocks, blockId);
+    if (!block) return { valid: false, reason: 'BLOCK_NOT_FOUND' };
+
+    // Rock check
+    if (block.type === 'rock') {
+        return { valid: false, reason: 'ROCK_IMMOVABLE' };
+    }
+
+    // Orientation check
     const isHorizontal = block.width > block.height;
     const isVertical = block.height > block.width;
 
-    if (isHorizontal) {
-        return direction === DIRECTIONS.LEFT || direction === DIRECTIONS.RIGHT;
+    if (isHorizontal && (direction === DIRECTIONS.UP || direction === DIRECTIONS.DOWN)) {
+        return { valid: false, reason: 'ORIENTATION_LOCKED' };
+    }
+    if (isVertical && (direction === DIRECTIONS.LEFT || direction === DIRECTIONS.RIGHT)) {
+        return { valid: false, reason: 'ORIENTATION_LOCKED' };
     }
 
-    if (isVertical) {
-        return direction === DIRECTIONS.UP || direction === DIRECTIONS.DOWN;
-    }
-
-    return false;
-};
-
-/**
- * Check if a block would be within grid bounds after moving
- */
-const isWithinBounds = (block, newX, newY) => {
-    return (
-        newX >= 0 &&
-        newY >= 0 &&
-        newX + block.width <= GRID_COLS &&
-        newY + block.height <= GRID_ROWS
-    );
-};
-
-/**
- * Check if two blocks collide
- */
-const blocksCollide = (block1, block2) => {
-    return !(
-        block1.x + block1.width <= block2.x ||
-        block1.x >= block2.x + block2.width ||
-        block1.y + block1.height <= block2.y ||
-        block1.y >= block2.y + block2.height
-    );
-};
-
-/**
- * Detect collision with any other block
- */
-export const detectCollision = (movingBlock, allBlocks) => {
-    for (const block of allBlocks) {
-        if (block.id === movingBlock.id) continue;
-        if (blocksCollide(movingBlock, block)) {
-            return true;
-        }
-    }
-    return false;
-};
-
-/**
- * Check if a single-cell move is valid
- * @param {Array} blocks - Current blocks array
- * @param {string} blockId - ID of block to move
- * @param {string} direction - Direction constant
- * @returns {boolean} - True if move is valid
- */
-export const isValidMove = (blocks, blockId, direction) => {
-    const block = blocks.find(b => b.id === blockId);
-    if (!block) return false;
-
-    // Check orientation constraint
-    if (!isDirectionAllowedForBlock(block, direction)) {
-        return false;
-    }
-
-    // Calculate new position (single cell)
-    const { dx, dy } = getDirectionVector(direction);
-    const newX = block.x + dx;
-    const newY = block.y + dy;
+    // Get leading-edge cells
+    const leadingCells = getLeadingEdgeCells(block, direction);
 
     // Check bounds
-    if (!isWithinBounds(block, newX, newY)) {
-        return false;
+    for (const cell of leadingCells) {
+        if (cell.x < 0 || cell.x >= GRID_COLS || cell.y < 0 || cell.y >= GRID_ROWS) {
+            return { valid: false, reason: 'OUT_OF_BOUNDS' };
+        }
     }
 
-    // Create hypothetical moved block
-    const movedBlock = { ...block, x: newX, y: newY };
-
-    // Check collisions
-    if (detectCollision(movedBlock, blocks)) {
-        return false;
+    // Check grid occupancy for leading cells (grid-based collision)
+    for (const cell of leadingCells) {
+        if (grid[cell.y][cell.x] !== null) {
+            return { valid: false, reason: 'CELL_OCCUPIED' };
+        }
     }
 
-    return true;
+    return { valid: true };
 };
 
 /**
- * Attempt to move a block by one cell in the given direction
- * @param {Object} gameState - Current game state {blocks, moves, ...}
- * @param {string} blockId - ID of block to move
- * @param {string} direction - Direction constant
- * @returns {Object|null} - New game state or null if invalid
+ * Attempt to move an entity (ball or block)
+ * @returns {Object|null} New game state or null if invalid
  */
-export const attemptMove = (gameState, blockId, direction) => {
-    const { blocks, moves } = gameState;
+export const attemptMove = (gameState, entityId, direction) => {
+    const { blocks, grid, hole, moves } = gameState;
+    const entity = getBlockById(blocks, entityId);
 
-    if (!isValidMove(blocks, blockId, direction)) {
-        return null; // Invalid move returns null
+    if (!entity) return null;
+
+    // SPLIT LOGIC PATHS - Ball vs Block
+    let validation;
+    if (entity.type === 'ball') {
+        validation = validateBallMove(grid, entity, direction, hole);
+    } else {
+        validation = validateBlockMove(grid, blocks, entityId, direction);
     }
 
-    // Apply the move
+    if (!validation.valid) {
+        return null; // Invalid move
+    }
+
+    // Execute move - Grid is updated atomically
     const { dx, dy } = getDirectionVector(direction);
-    const newBlocks = blocks.map(block => {
-        if (block.id === blockId) {
-            return {
-                ...block,
-                x: block.x + dx,
-                y: block.y + dy
-            };
+
+    // 1. Clear old grid cells
+    const newGrid = grid.map(row => [...row]); // Deep copy
+    for (let h = 0; h < entity.height; h++) {
+        for (let w = 0; w < entity.width; w++) {
+            newGrid[entity.y + h][entity.x + w] = null;
         }
-        return block;
+    }
+
+    // 2. Update entity position
+    const newBlocks = blocks.map(b => {
+        if (b.id === entityId) {
+            return { ...b, x: b.x + dx, y: b.y + dy };
+        }
+        return b;
     });
 
-    // Return new game state with incremented move count
+    // 3. Re-occupy new grid cells
+    const movedEntity = newBlocks.find(b => b.id === entityId);
+    for (let h = 0; h < movedEntity.height; h++) {
+        for (let w = 0; w < movedEntity.width; w++) {
+            newGrid[movedEntity.y + h][movedEntity.x + w] = entityId;
+        }
+    }
+
     return {
         ...gameState,
         blocks: newBlocks,
-        moves: moves + 1
+        grid: newGrid,
+        moves: moves + 1,
+        isWinningMove: validation.isWinningMove || false
     };
 };
 
 /**
- * Check win condition: hero's rightmost cell aligns with exit column
- * @param {Object} heroBlock - The hero block object
- * @param {Object} exitPosition - Exit position {x, y}
- * @returns {boolean} - True if win condition met
+ * Check win condition: ball occupies hole cell
  */
-export const checkWinCondition = (heroBlock, exitPosition) => {
-    if (!heroBlock) return false;
-
-    // Hero's rightmost cell x-coordinate
-    const heroRightmost = heroBlock.x + heroBlock.width - 1;
-
-    // Check if rightmost cell aligns with exit column and correct row
+export const checkWinCondition = (ballBlock, holePosition) => {
+    if (!ballBlock) return false;
     return (
-        heroRightmost === exitPosition.x &&
-        heroBlock.y === exitPosition.y
+        ballBlock.x === holePosition.x &&
+        ballBlock.y === holePosition.y
     );
 };
 
 /**
- * Get precomputed minimum moves for a level
- * Source of truth for scoring
- * @param {number} levelId - Level number (1-5)
- * @returns {number} - Optimal move count
+ * Get minimum moves for a level
  */
 export const calculateMinMoves = (levelId) => {
     const level = MOTION_LEVELS.find(l => l.id === levelId);
@@ -187,9 +248,7 @@ export const calculateMinMoves = (levelId) => {
 };
 
 /**
- * Load level data and create initial game state
- * @param {number} levelId - Level number
- * @returns {Object} - Initial game state
+ * Load level and initialize grid state
  */
 export const loadLevel = (levelId) => {
     const levelData = MOTION_LEVELS.find(l => l.id === levelId);
@@ -197,10 +256,14 @@ export const loadLevel = (levelId) => {
         throw new Error(`Level ${levelId} not found`);
     }
 
+    const blocks = JSON.parse(JSON.stringify(levelData.blocks));
+    const grid = populateGrid(blocks); // Grid initialized from blocks
+
     return {
         levelId: levelData.id,
-        blocks: JSON.parse(JSON.stringify(levelData.blocks)), // Deep clone
-        exit: { ...levelData.exit },
+        blocks,
+        grid, // Grid is now part of state
+        hole: { ...levelData.hole },
         minMoves: levelData.minMoves,
         moves: 0
     };
@@ -208,13 +271,6 @@ export const loadLevel = (levelId) => {
 
 /**
  * Calculate score for completed level
- * Formula: ((level + X)^2) / TimeTaken
- * where X = minMoves / actualMoves
- * @param {number} level - Level number
- * @param {number} minMoves - Optimal moves
- * @param {number} actualMoves - Player's moves
- * @param {number} timeTakenSeconds - Time in seconds
- * @returns {number} - Score
  */
 export const calculateLevelScore = (level, minMoves, actualMoves, timeTakenSeconds) => {
     if (actualMoves === 0 || timeTakenSeconds === 0) return 0;
@@ -223,34 +279,65 @@ export const calculateLevelScore = (level, minMoves, actualMoves, timeTakenSecon
     const numerator = Math.pow(level + X, 2);
     const score = numerator / timeTakenSeconds;
 
-    return Math.round(score * 100) / 100; // Round to 2 decimals
+    return Math.round(score * 100) / 100;
 };
 
 /**
- * Validate level difficulty constraints
- * (For debugging/testing purposes)
- * @param {Object} levelData - Level configuration
- * @returns {Object} - Validation result {valid, errors}
+ * Validate level meets company-grade difficulty standards
  */
-export const validateLevel = (levelData) => {
-    const errors = [];
+export const validateLevelDesign = (levelData) => {
+    const { blocks, hole } = levelData;
+    const grid = populateGrid(blocks);
+    const ball = blocks.find(b => b.type === 'ball');
 
-    // Check hero exists
-    const hero = levelData.blocks.find(b => b.type === 'hero');
-    if (!hero) {
-        errors.push('Level must have a hero block');
+    if (!ball) {
+        return { valid: false, issues: ['No ball found'], stats: {} };
     }
 
-    // Check hero is initially blocked from exit
-    if (hero) {
-        const initialState = loadLevel(levelData.id);
-        if (checkWinCondition(hero, levelData.exit)) {
-            errors.push('Hero must be blocked at level start');
-        }
+    const issues = [];
+
+    // Rule 1: Ball blocked ≥2 sides
+    const ballBlockedSides = [
+        (grid[ball.y - 1]?.[ball.x] !== null) || ball.y === 0,
+        (grid[ball.y + 1]?.[ball.x] !== null) || ball.y === GRID_ROWS - 1,
+        (grid[ball.y]?.[ball.x - 1] !== null) || ball.x === 0,
+        (grid[ball.y]?.[ball.x + 1] !== null) || ball.x === GRID_COLS - 1,
+    ].filter(Boolean).length;
+
+    if (ballBlockedSides < 2) {
+        issues.push(`Ball only blocked on ${ballBlockedSides} sides (need ≥2)`);
+    }
+
+    // Rule 2: ≥60% blocks immobile
+    const plasticBlocks = blocks.filter(b => b.type === 'plastic');
+    const movableBlocks = plasticBlocks.filter(b => {
+        return ['UP', 'DOWN', 'LEFT', 'RIGHT'].some(dir => {
+            const validation = validateBlockMove(grid, blocks, b.id, dir);
+            return validation.valid;
+        });
+    });
+
+    const immobilePercent = plasticBlocks.length > 0
+        ? (plasticBlocks.length - movableBlocks.length) / plasticBlocks.length * 100
+        : 0;
+
+    if (immobilePercent < 60) {
+        issues.push(`Only ${Math.round(immobilePercent)}% immobile (need ≥60%)`);
+    }
+
+    // Rule 3: Min 5 moves
+    if (levelData.minMoves < 5) {
+        issues.push(`MinMoves=${levelData.minMoves} (need ≥5)`);
     }
 
     return {
-        valid: errors.length === 0,
-        errors
+        valid: issues.length === 0,
+        issues,
+        stats: {
+            ballBlockedSides,
+            immobilePercent: Math.round(immobilePercent),
+            minMoves: levelData.minMoves
+        }
     };
 };
+

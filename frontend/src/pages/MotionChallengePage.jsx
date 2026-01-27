@@ -10,6 +10,7 @@ import { GRID_ROWS, GRID_COLS } from '../data/motionLevels';
 
 const MAX_WARNINGS = 3;
 const TOTAL_DURATION = 360; // 6 minutes
+const CELL_SIZE = 78; // Professional sizing (1.3× larger)
 
 export default function MotionChallengePage() {
     const { id } = useParams();
@@ -20,6 +21,7 @@ export default function MotionChallengePage() {
     const {
         level,
         blocks,
+        hole,
         moves,
         score,
         isGameOver,
@@ -39,6 +41,7 @@ export default function MotionChallengePage() {
     const [hasStarted, setHasStarted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [showInstructions, setShowInstructions] = useState(true);
 
     // Proctoring state
     const [warningCount, setWarningCount] = useState(0);
@@ -48,8 +51,9 @@ export default function MotionChallengePage() {
     const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
     const [submissionReason, setSubmissionReason] = useState(null);
 
-    // Drag state
-    const [dragState, setDragState] = useState(null);
+    // Drag state - intention signal only
+    const [dragStart, setDragStart] = useState(null);
+    const [invalidMoveBlock, setInvalidMoveBlock] = useState(null);
 
     // Refs
     const examSessionTokenRef = useRef(null);
@@ -157,7 +161,8 @@ export default function MotionChallengePage() {
         return () => { mounted = false; };
     }, [id, navigate]);
 
-    const handleStartGame = () => {
+    const handleStartAssessment = () => {
+        setShowInstructions(false);
         setHasStarted(true);
         handleFixFullScreen();
         startGame();
@@ -220,7 +225,7 @@ export default function MotionChallengePage() {
         return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
     }, [isGameOver, submitting, addWarning, hasStarted]);
 
-    // Block interactions/proctoring
+    // Block interactions
     useEffect(() => {
         const block = e => e.preventDefault();
         window.addEventListener('contextmenu', block);
@@ -254,251 +259,261 @@ export default function MotionChallengePage() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [hasStarted, isGameOver, isLevelComplete, activeBlockId, handleMove, DIRECTIONS]);
 
-    // Mouse drag handlers
+    // Mouse drag handlers - INTENTION SIGNAL ONLY
     const handleMouseDown = (blockId, e) => {
         if (isGameOver || isLevelComplete) return;
         const block = blocks.find(b => b.id === blockId);
         if (block.type === 'rock') return;
 
         setActiveBlockId(blockId);
-        setDragState({
+        setDragStart({
             blockId,
             startX: e.clientX,
-            startY: e.clientY,
-            hasMoved: false
+            startY: e.clientY
         });
     };
 
-    const handleMouseMove = useCallback((e) => {
-        if (!dragState) return;
+    const handleMouseUp = useCallback((e) => {
+        if (!dragStart) return;
 
-        const deltaX = e.clientX - dragState.startX;
-        const deltaY = e.clientY - dragState.startY;
+        const deltaX = e.clientX - dragStart.startX;
+        const deltaY = e.clientY - dragStart.startY;
 
-        // Determine dominant direction and cell count
-        const absDeltaX = Math.abs(deltaX);
-        const absDeltaY = Math.abs(deltaY);
+        const MIN_DRAG_THRESHOLD = 20; // pixels
 
-        if (absDeltaX > 20 || absDeltaY > 20) {
-            const block = blocks.find(b => b.id === dragState.blockId);
-            if (!block) return;
-
-            let direction = null;
-            let cells = 0;
-
-            const isHorizontal = block.width > block.height;
-            const isVertical = block.height > block.width;
-
-            if (isHorizontal && absDeltaX > absDeltaY) {
-                direction = deltaX > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT;
-                cells = Math.floor(absDeltaX / 60); // Assuming 60px cell size
-            } else if (isVertical && absDeltaY > absDeltaX) {
-                direction = deltaY > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP;
-                cells = Math.floor(absDeltaY / 60);
-            }
-
-            if (direction && cells > 0) {
-                for (let i = 0; i < cells; i++) {
-                    handleMove(dragState.blockId, direction);
-                }
-                setDragState({
-                    ...dragState,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    hasMoved: true
-                });
-            }
+        if (Math.abs(deltaX) < MIN_DRAG_THRESHOLD && Math.abs(deltaY) < MIN_DRAG_THRESHOLD) {
+            setDragStart(null);
+            return; // Just a click, not a drag
         }
-    }, [dragState, blocks, handleMove, DIRECTIONS]);
 
-    const handleMouseUp = useCallback(() => {
-        setDragState(null);
-    }, []);
+        // Determine direction from drag vector
+        let direction = null;
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            direction = deltaX > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT;
+        } else {
+            direction = deltaY > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP;
+        }
 
+        // SINGLE move attempt - no loops, no sweeping
+        const moved = handleMove(dragStart.blockId, direction);
+
+        if (!moved) {
+            // Visual feedback for invalid move
+            setInvalidMoveBlock(dragStart.blockId);
+            setTimeout(() => setInvalidMoveBlock(null), 300);
+        }
+
+        setDragStart(null);
+    }, [dragStart, handleMove, DIRECTIONS]);
+
+    // Attach global mouse up listener
     useEffect(() => {
-        if (dragState) {
-            window.addEventListener('mousemove', handleMouseMove);
+        if (dragStart) {
             window.addEventListener('mouseup', handleMouseUp);
-            return () => {
-                window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
-            };
+            return () => window.removeEventListener('mouseup', handleMouseUp);
         }
-    }, [dragState, handleMouseMove, handleMouseUp]);
+    }, [dragStart, handleMouseUp]);
 
-    // Render helpers
+
     const getBlockColor = (block) => {
-        if (block.type === 'hero') return 'bg-red-500';
-        if (block.type === 'rock') return 'bg-gray-600';
-        return 'bg-blue-400';
+        if (block.type === 'ball') return '#dc2626'; // Red ball
+        if (block.type === 'rock') return '#4b5563'; // Dark gray rock
+
+        // Plastic blocks: vertical blue, horizontal purple/green
+        if (block.type === 'plastic') {
+            const isVertical = block.height > block.width;
+            const isHorizontal = block.width > block.height;
+
+            if (isVertical) return '#3b82f6'; // Blue vertical
+            if (isHorizontal) {
+                // Alternate purple/green for visual variety
+                const blockNum = parseInt(block.id.match(/\d+/)?.[0] || '0');
+                return blockNum % 2 === 1 ? '#9333ea' : '#10b981'; // Purple odd, Green even
+            }
+        }
+
+        return '#6b7280'; // Default gray
     };
 
-    const getCellSize = () => {
-        if (!gridRef.current) return 60;
-        const gridHeight = gridRef.current.clientHeight;
-        return Math.floor(gridHeight / GRID_ROWS) - 2;
+    const renderBlock = (block) => {
+        const isActive = activeBlockId === block.id;
+        const isInvalid = invalidMoveBlock === block.id;
+        const isDraggable = block.type !== 'rock';
+
+        const baseStyle = {
+            position: 'absolute',
+            left: `${block.x * CELL_SIZE + 2}px`,
+            top: `${block.y * CELL_SIZE + 2}px`,
+            width: `${block.width * CELL_SIZE}px`,
+            height: `${block.height * CELL_SIZE}px`,
+            backgroundColor: getBlockColor(block),
+            border: isActive ? '2px solid white' : `1px solid ${getBlockColor(block)}`,
+            boxShadow: isInvalid
+                ? '0 0 0 3px rgba(255, 0, 0, 0.4)'
+                : '0 1px 2px rgba(0,0,0,0.1)',
+            cursor: isDraggable ? 'grab' : 'not-allowed',
+            opacity: isActive ? 0.9 : 1,
+            transform: isInvalid ? 'scale(0.98)' : 'scale(1)',
+            transition: 'all 150ms ease',
+            zIndex: block.type === 'ball' ? 10 : 5
+        };
+
+        // Ball is rendered as circle
+        if (block.type === 'ball') {
+            return (
+                <div
+                    key={block.id}
+                    style={{
+                        ...baseStyle,
+                        borderRadius: '50%',
+                        boxShadow: '0 2px 4px rgba(220, 38, 38, 0.3)'
+                    }}
+                    onMouseDown={(e) => handleMouseDown(block.id, e)}
+                    onClick={() => setActiveBlockId(block.id)}
+                />
+            );
+        }
+
+        // Plastic blocks and rocks as rectangles
+        return (
+            <div
+                key={block.id}
+                style={{
+                    ...baseStyle,
+                    borderRadius: '4px'
+                }}
+                onMouseDown={(e) => handleMouseDown(block.id, e)}
+                onClick={() => setActiveBlockId(block.id)}
+            />
+        );
     };
 
-    if (loading) return <div className="h-screen flex items-center justify-center">Initializing Exam Session...</div>;
+    if (loading) return <div className="h-screen flex items-center justify-center bg-white" style={{ fontFamily: 'Inter, sans-serif' }}>Initializing assessment...</div>;
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 select-none overflow-hidden flex flex-col">
-            {/* HEADER */}
-            <div className="h-16 bg-white border-b flex items-center justify-between px-6 shadow-sm z-10">
-                <div className="flex items-center gap-4">
-                    <div className="font-bold text-xl text-red-600">Motion Challenge</div>
-                    <div className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-600">
-                        Level: {level}
-                    </div>
-                    <div className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-600">
-                        Moves: {moves}
-                    </div>
+        <div className="min-h-screen bg-gray-50 text-gray-800 select-none overflow-hidden flex flex-col" style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+            {/* PROFESSIONAL TOP BAR */}
+            <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm">
+                <div className="flex items-center gap-6">
+                    <div className="text-sm font-medium text-gray-900">Motion Assessment</div>
+                    <div className="text-sm text-gray-600">Level {level}/5</div>
+                    <div className="text-sm text-gray-600">Moves: {moves}</div>
                 </div>
 
-                <div className="flex items-center gap-6 font-mono text-lg">
-                    <div className={timeLeft !== null && timeLeft < 60 ? 'text-red-500 animate-pulse' : 'text-gray-700'}>
+                <div className="flex items-center gap-6">
+                    <div className={`font-mono text-sm font-medium ${timeLeft !== null && timeLeft < 60 ? 'text-red-600' : 'text-gray-700'}`}>
                         {timeLeft !== null ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}` : '--:--'}
                     </div>
-                    <div className="font-bold">
+                    <div className="text-sm text-gray-500">
                         Score: {Math.round(score)}
                     </div>
                 </div>
             </div>
 
-            {/* GAME AREA */}
-            {!hasStarted ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
-                    <div className="bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all max-w-lg w-full border border-gray-100">
-                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <span className="text-4xl">🧩</span>
+            {/* INSTRUCTIONS MODAL (ONE-TIME ONLY) */}
+            {showInstructions && !hasStarted && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-8">
+                        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Motion Assessment</h2>
+                        <p className="text-gray-700 mb-4 leading-relaxed">
+                            Rearrange blocks to guide the red ball into the black hole.
+                            Complete each problem in minimum moves within the given time.
+                        </p>
+                        <div className="bg-gray-50 rounded p-4 mb-6">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-2">Rules</h3>
+                            <ul className="text-sm text-gray-600 space-y-1">
+                                <li>• Red ball moves in all four directions</li>
+                                <li>• Move plastic blocks to clear a path</li>
+                                <li>• Rocks cannot be moved</li>
+                                <li>• You have 6 minutes for 5 levels</li>
+                            </ul>
                         </div>
-                        <h2 className="text-3xl font-bold text-gray-800 mb-4">Ready for the Motion Challenge?</h2>
-                        <ul className="text-left text-gray-600 mb-8 space-y-3">
-                            <li className="flex items-start gap-2">
-                                <span className="text-red-500 mt-1">🔹</span>
-                                <div><strong>Full Screen Required:</strong> The test will enter full-screen mode automatically.</div>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-red-500 mt-1">🔹</span>
-                                <div><strong>No Interruption:</strong> Do not switch tabs or exit full screen. Violations will be recorded.</div>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-red-500 mt-1">🔹</span>
-                                <div><strong>Game Rules:</strong> Move the red block to the exit on the right by sliding blocks. Use mouse or arrow keys.</div>
-                            </li>
-                        </ul>
                         <button
-                            onClick={handleStartGame}
-                            className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-bold text-xl shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                            onClick={handleStartAssessment}
+                            className="w-full py-3 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors"
                         >
-                            Start Challenge
+                            Start Assessment
                         </button>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex-1 flex items-center justify-center relative p-4">
-                    {warningCount > 0 && (
-                        <div className="absolute top-4 bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-bold border border-red-200 z-20">
-                            ⚠️ Warning: {warningCount}/{MAX_WARNINGS} Violations
-                        </div>
-                    )}
-
-                    <div className="flex gap-8 items-start max-w-6xl w-full">
-                        {/* GRID */}
-                        <div className="flex-1">
-                            <div
-                                ref={gridRef}
-                                className="relative bg-gray-100 rounded-xl border-4 border-gray-800 shadow-2xl"
-                                style={{
-                                    width: `${GRID_COLS * 62}px`,
-                                    height: `${GRID_ROWS * 62}px`
-                                }}
-                            >
-                                {/* Grid cells */}
-                                {Array.from({ length: GRID_ROWS }).map((_, row) =>
-                                    Array.from({ length: GRID_COLS }).map((_, col) => (
-                                        <div
-                                            key={`${row}-${col}`}
-                                            className="absolute border border-gray-300"
-                                            style={{
-                                                left: `${col * 60}px`,
-                                                top: `${row * 60}px`,
-                                                width: '60px',
-                                                height: '60px'
-                                            }}
-                                        />
-                                    ))
-                                )}
-
-                                {/* Exit marker */}
-                                <div
-                                    className="absolute bg-green-400 border-4 border-green-600 rounded-lg flex items-center justify-center text-2xl font-bold"
-                                    style={{
-                                        left: `${4 * 60}px`,
-                                        top: `${2 * 60}px`,
-                                        width: '60px',
-                                        height: '60px',
-                                        zIndex: 1
-                                    }}
-                                >
-                                    🚪
-                                </div>
-
-                                {/* Blocks */}
-                                {blocks.map(block => (
-                                    <div
-                                        key={block.id}
-                                        className={`absolute ${getBlockColor(block)} border-2 border-gray-800 rounded-lg shadow-lg transition-all duration-200 flex items-center justify-center font-bold text-white cursor-pointer hover:brightness-110 ${activeBlockId === block.id ? 'ring-4 ring-yellow-400' : ''}`}
-                                        style={{
-                                            left: `${block.x * 60}px`,
-                                            top: `${block.y * 60}px`,
-                                            width: `${block.width * 60}px`,
-                                            height: `${block.height * 60}px`,
-                                            zIndex: block.type === 'hero' ? 10 : 5,
-                                            cursor: block.type === 'rock' ? 'not-allowed' : 'grab'
-                                        }}
-                                        onMouseDown={(e) => handleMouseDown(block.id, e)}
-                                        onClick={() => setActiveBlockId(block.id)}
-                                    >
-                                        {block.type === 'hero' && '🚗'}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* INFO PANEL */}
-                        <div className="w-64 space-y-4">
-                            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200">
-                                <h3 className="font-bold text-lg mb-2">Instructions</h3>
-                                <ul className="text-sm text-gray-600 space-y-1">
-                                    <li>• Click block to select</li>
-                                    <li>• Use arrow keys OR drag</li>
-                                    <li>• Move red block to exit</li>
-                                </ul>
-                            </div>
-
-                            <button
-                                onClick={resetLevel}
-                                className="w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
-                            >
-                                Reset Level
-                            </button>
-
-                            {isLevelComplete && (
-                                <div className="bg-green-100 text-green-800 p-4 rounded-lg font-bold text-center">
-                                    ✅ Level Complete!
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
             )}
 
+            {/* GAMEPLAY AREA - MINIMAL & CLEAN */}
+            {hasStarted && !showInstructions && (
+                <div className="flex-1 flex items-center justify-center relative">
+                    {/* Minimal warning display */}
+                    {warningCount > 0 && (
+                        <div className="absolute top-4 bg-red-50 text-red-700 px-4 py-2 rounded text-sm border border-red-200">
+                            Warning: {warningCount}/{MAX_WARNINGS} Violations
+                        </div>
+                    )}
+
+                    {/* GRID ONLY - NO SURROUNDING CARDS */}
+                    <div
+                        ref={gridRef}
+                        className="relative bg-gray-50 rounded border border-gray-300"
+                        style={{
+                            width: `${GRID_COLS * CELL_SIZE + 4}px`,
+                            height: `${GRID_ROWS * CELL_SIZE + 4}px`,
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)'
+                        }}
+                    >
+                        {/* Grid cells - thin lines */}
+                        {Array.from({ length: GRID_ROWS }).map((_, row) =>
+                            Array.from({ length: GRID_COLS }).map((_, col) => (
+                                <div
+                                    key={`${row}-${col}`}
+                                    className="absolute"
+                                    style={{
+                                        left: `${col * CELL_SIZE + 2}px`,
+                                        top: `${row * CELL_SIZE + 2}px`,
+                                        width: `${CELL_SIZE}px`,
+                                        height: `${CELL_SIZE}px`,
+                                        border: '0.5px solid #e5e7eb'
+                                    }}
+                                />
+                            ))
+                        )}
+
+                        {/* BLACK HOLE (Exit) - dynamically rendered from level data */}
+                        {hole && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: `${hole.x * CELL_SIZE + 2}px`,
+                                    top: `${hole.y * CELL_SIZE + 2}px`,
+                                    width: `${CELL_SIZE}px`,
+                                    height: `${CELL_SIZE}px`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 1
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#1f2937',
+                                        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)',
+                                        opacity: 0.4
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Blocks - render using renderBlock function */}
+                        {blocks.map(block => renderBlock(block))}
+                    </div>
+                </div>
+            )}
+
+            {/* SUBMITTING OVERLAY - SILENT & PROFESSIONAL */}
             {submitting && (
-                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                    <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <h2 className="text-2xl font-bold text-gray-800">Submitting Results...</h2>
-                    <p className="text-gray-500 mt-2">Please wait do not close the window.</p>
+                <div className="absolute inset-0 bg-white flex flex-col items-center justify-center z-50">
+                    <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                    <p className="text-gray-700 text-sm">Submitting assessment...</p>
                 </div>
             )}
 
@@ -507,50 +522,47 @@ export default function MotionChallengePage() {
                 onClose={handleFixFullScreen}
                 title="Security Validation"
                 actions={
-                    <button onClick={handleFixFullScreen} className="bg-red-600 text-white px-6 py-2 rounded-lg font-bold">
-                        Return to Test
+                    <button onClick={handleFixFullScreen} className="bg-blue-600 text-white px-6 py-2 rounded font-medium">
+                        Return to Assessment
                     </button>
                 }
             >
                 <div className="text-center py-4">
-                    <p>Full Screen mode is required. Please authorize to continue.</p>
+                    <p>Full screen mode is required. Please authorize to continue.</p>
                 </div>
             </Modal>
 
             <Modal
                 isOpen={isSubmissionModalOpen}
-                title="Test Submitted Successfully"
+                title="Assessment Submitted"
                 onClose={() => navigate('/dashboard')}
                 actions={
-                    <button onClick={() => navigate('/dashboard')} className="bg-red-600 text-white px-6 py-2 rounded-lg font-bold">
+                    <button onClick={() => navigate('/dashboard')} className="bg-blue-600 text-white px-6 py-2 rounded font-medium">
                         Return to Dashboard
                     </button>
                 }
             >
                 <div className="text-center py-6">
                     {submissionReason === 'TIMEOUT' ? (
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="text-4xl">⏰</div>
-                            <p className="text-lg text-gray-700">Your test has been successfully submitted.</p>
-                            <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full font-bold text-sm">
-                                Status: TIMEOUT
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded font-medium text-sm">
+                                TIMEOUT
                             </div>
-                            <p className="text-sm text-gray-500">The time limit was reached.</p>
+                            <p className="text-sm text-gray-600">Time limit reached.</p>
                         </div>
                     ) : submissionReason === 'VIOLATION_LIMIT' ? (
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="text-4xl">⚠️</div>
-                            <p className="text-lg text-gray-700">Your test has been successfully submitted.</p>
-                            <div className="bg-red-100 text-red-800 px-4 py-2 rounded-full font-bold text-sm">
-                                Status: TERMINATED
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="bg-red-100 text-red-800 px-4 py-2 rounded font-medium text-sm">
+                                TERMINATED
                             </div>
-                            <p className="text-sm text-gray-500">Maximum security violations reached.</p>
+                            <p className="text-sm text-gray-600">Maximum violations reached.</p>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="text-4xl">✅</div>
-                            <p className="text-lg text-green-600 font-bold">Great job!</p>
-                            <p className="text-sm text-gray-500">Your results have been successfully recorded.</p>
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="bg-green-100 text-green-800 px-4 py-2 rounded font-medium text-sm">
+                                COMPLETED
+                            </div>
+                            <p className="text-sm text-gray-600">Assessment submitted successfully.</p>
                         </div>
                     )}
                 </div>
