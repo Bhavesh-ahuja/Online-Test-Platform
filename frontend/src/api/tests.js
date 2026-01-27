@@ -11,9 +11,8 @@ export const testsApi = {
         return res.json();
     },
 
-    getById: async (id, token) => {
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`${API_BASE_URL}/api/tests/${id}`, { headers });
+    getById: async (id) => {
+        const res = await authFetch(`/api/tests/${id}`);
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.message || 'Failed to fetch test details');

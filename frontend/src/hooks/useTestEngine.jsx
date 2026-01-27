@@ -33,7 +33,7 @@ export function useTestEngine(testId) {
         setSubmissionStatus(sessionData.status || 'IN_PROGRESS');
         sessionStorage.setItem('examSessionToken', sessionData.examSessionToken);
 
-        const testData = await testsApi.getById(testId, sessionData.examSessionToken);
+        const testData = await testsApi.getById(testId);
         setTest(testData);
         setQuestions(testData.questions || []);
 
@@ -63,34 +63,34 @@ export function useTestEngine(testId) {
     };
   }, [testId]);
 
-    // 2. Timer Logic (Delta Calculation)
-    const localTimerRef = useRef(null);
+  // 2. Timer Logic (Delta Calculation)
+  const localTimerRef = useRef(null);
 
-    useEffect(() => {
-        // Clear any existing timer to avoid duplicates when dependencies change
-        if (localTimerRef.current) clearInterval(localTimerRef.current);
+  useEffect(() => {
+    // Clear any existing timer to avoid duplicates when dependencies change
+    if (localTimerRef.current) clearInterval(localTimerRef.current);
 
-        if (!loading && timeLeft > 0 && submissionStatus === 'IN_PROGRESS') {
-            const terminationTime = Date.now() + (timeLeft * 1000);
+    if (!loading && timeLeft > 0 && submissionStatus === 'IN_PROGRESS') {
+      const terminationTime = Date.now() + (timeLeft * 1000);
 
-            localTimerRef.current = setInterval(() => {
-                const now = Date.now();
-                const remainingRaw = Math.ceil((terminationTime - now) / 1000);
-                const remaining = Math.max(0, remainingRaw);
+      localTimerRef.current = setInterval(() => {
+        const now = Date.now();
+        const remainingRaw = Math.ceil((terminationTime - now) / 1000);
+        const remaining = Math.max(0, remainingRaw);
 
-                setTimeLeft(remaining);
+        setTimeLeft(remaining);
 
-                if (remaining <= 0) {
-                    clearInterval(localTimerRef.current);
-                    handleSubmit('TIMEOUT');
-                }
-            }, 1000);
+        if (remaining <= 0) {
+          clearInterval(localTimerRef.current);
+          handleSubmit('TIMEOUT');
         }
+      }, 1000);
+    }
 
-        return () => {
-            if (localTimerRef.current) clearInterval(localTimerRef.current);
-        };
-    }, [loading, submissionStatus]); // Removed timeLeft dependency to prevent infinite re-creation loop
+    return () => {
+      if (localTimerRef.current) clearInterval(localTimerRef.current);
+    };
+  }, [loading, submissionStatus]); // Removed timeLeft dependency to prevent infinite re-creation loop
 
   // 3. Autosave
   const examToken = sessionStorage.getItem('examSessionToken');
@@ -127,35 +127,35 @@ export function useTestEngine(testId) {
   };
 
   // ✅ FIXED SUBMIT LOGIC (CORE FIX)
- const handleSubmit = async (statusOverride = 'COMPLETED') => {
-  try {
-    const res = await testsApi.submit(
-      testId,
-      { answers, status: statusOverride },
-      examToken
-    );
+  const handleSubmit = async (statusOverride = 'COMPLETED') => {
+    try {
+      const res = await testsApi.submit(
+        testId,
+        { answers, status: statusOverride },
+        examToken
+      );
 
-    // ✅ Don't remove token immediately - keep it for results fetch
-    // sessionStorage.removeItem('examSessionToken');
+      // ✅ Don't remove token immediately - keep it for results fetch
+      // sessionStorage.removeItem('examSessionToken');
 
-    const finalSubmissionId =
-      res?.submissionId ||
-      res?.id ||
-      submissionId;
+      const finalSubmissionId =
+        res?.submissionId ||
+        res?.id ||
+        submissionId;
 
-    if (res?.showResult && finalSubmissionId) {
-      navigate(`/results/${finalSubmissionId}`, { replace: true });
-    } else {
-      navigate('/test-submitted', { replace: true });
+      if (res?.showResult && finalSubmissionId) {
+        navigate(`/results/${finalSubmissionId}`, { replace: true });
+      } else {
+        navigate('/test-submitted', { replace: true });
+      }
+    } catch (err) {
+      console.error('Submit failed', err);
+      setError('Submission failed. Please try again.');
+    } finally {
+      // ✅ Remove token after navigation
+      sessionStorage.removeItem('examSessionToken');
     }
-  } catch (err) {
-    console.error('Submit failed', err);
-    setError('Submission failed. Please try again.');
-  } finally {
-    // ✅ Remove token after navigation
-    sessionStorage.removeItem('examSessionToken');
-  }
-};
+  };
 
   // 5. Anti-Cheat
   const addWarning = useCallback(() => {

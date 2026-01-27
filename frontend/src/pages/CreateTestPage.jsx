@@ -160,7 +160,7 @@ function CreateTestPage() {
     try {
       const payload = {
         ...testData,
-        duration: parseInt(testData.duration, 10),
+        duration: parseInt(testData.duration, 10) || 30, // Fallback to 30 if NaN
         scheduledStart: testData.scheduledStart ? new Date(testData.scheduledStart).toISOString() : null,
         scheduledEnd: testData.scheduledEnd ? new Date(testData.scheduledEnd).toISOString() : null,
         maxAttempts: maxAttempts ? parseInt(maxAttempts, 10) : null,
@@ -256,8 +256,8 @@ function CreateTestPage() {
 
           {/* Dynamic Info Card */}
           <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD'
-              ? 'bg-blue-50 border-blue-200 text-blue-900'
-              : 'bg-purple-50 border-purple-200 text-purple-900'
+            ? 'bg-blue-50 border-blue-200 text-blue-900'
+            : 'bg-purple-50 border-purple-200 text-purple-900'
             }`}>
             <div className="text-3xl shrink-0">
               {testData.type === 'STANDARD' ? '📝' : '🔄'}

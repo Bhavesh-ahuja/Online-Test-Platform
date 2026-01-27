@@ -69,8 +69,8 @@ router.get(
 );
 router.get('/results/:submissionId', authenticateToken, getTestResult);
 
-// GET /api/tests/:id - Get test details by ID
-router.get('/:id', authenticateExamSession, getTestById);
+// GET /api/tests/:id - Get test details by ID (User Token)
+router.get('/:id', authenticateToken, getTestById);
 
 // PUT /api/tests/:id - Admin only: Update test
 router.put('/:id', authenticateToken, isAdmin, validateRequest(updateTestSchema), updateTest);
@@ -89,9 +89,6 @@ router.post('/:id/submit', authenticateExamSession, submitTest);
  * SUB-RESOURCES
  * ============================
  **/
-
-// GET /api/tests/:id/submissions - Admin only: Get all submissions for a test
-router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);
 
 // GET /api/tests/:id/submissions - Admin only: Get all submissions for a test
 router.get('/:id/submissions', authenticateToken, isAdmin, getTestSubmissions);

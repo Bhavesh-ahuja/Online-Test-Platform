@@ -35,6 +35,7 @@ export default function SwitchChallengePage() {
     const [timeLeft, setTimeLeft] = useState(null); // Null means "loading" / "not started"
     const [hasStarted, setHasStarted] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
     // --- SECURITY ---
@@ -142,45 +143,66 @@ export default function SwitchChallengePage() {
         let mounted = true;
 
         const initGame = async () => {
+            console.log("initGame called. isInitialized:", isInitializedRef.current);
             if (isInitializedRef.current) return;
             isInitializedRef.current = true;
 
+            // Safety Timeout
+            const timeoutId = setTimeout(() => {
+                if (mounted && loading) {
+                    console.error("Init timed out");
+                    setLoading(false);
+                    setError("Connection timed out. Please try refreshing.");
+                }
+            }, 15000);
+
             try {
                 // 1. Start Test Session (User Token needed)
+                console.log("Starting test session...");
                 const startRes = await authFetch(`/api/tests/${id}/start`, { method: 'POST' });
+                console.log("Start response status:", startRes.status);
+
                 if (!startRes.ok) {
-                    const err = await startRes.json();
-                    throw new Error(err.message || 'Failed to start test session');
+                    const err = await startRes.json().catch(() => ({}));
+                    throw new Error(err.message || err.error || 'Failed to start test session');
                 }
                 const startData = await startRes.json();
+                console.log("Session started. Token:", startData.examSessionToken ? "Received" : "Missing");
                 examSessionTokenRef.current = startData.examSessionToken;
 
                 if (!mounted) return;
 
-                // 2. Fetch Config (Exam Session Token needed)
-                const configRes = await fetch(`${API_BASE_URL}/api/tests/${id}`, {
-                    headers: { 'Authorization': `Bearer ${startData.examSessionToken}` }
-                });
+                // 2. Fetch Config (User Token needed)
+                console.log("Fetching test config...");
+                const configRes = await authFetch(`/api/tests/${id}`);
+                console.log("Config response status:", configRes.status);
 
                 if (!configRes.ok) throw new Error('Failed to load test config');
                 const data = await configRes.json();
+                console.log("Config loaded:", data);
 
                 // 3. Setup Timer
                 const totalSeconds = data.switchConfig?.durationSeconds || (data.duration * 60) || 360;
                 setTimeLeft(totalSeconds);
+
+                clearTimeout(timeoutId);
                 setLoading(false);
 
             } catch (err) {
-                console.error(err);
+                console.error("Init Error:", err);
                 if (mounted) {
-                    alert(`Error: ${err.message}`);
-                    navigate('/dashboard');
+                    clearTimeout(timeoutId);
+                    setLoading(false);
+                    setError(err.message || "Failed to load test");
                 }
             }
         };
 
         initGame();
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+            isInitializedRef.current = false; // Allow re-initialization on remount
+        };
     }, [id, navigate]);
 
     // --- GAME CONTROL ---
@@ -286,7 +308,28 @@ export default function SwitchChallengePage() {
         </div>
     );
 
-    if (loading) return <div className="h-screen flex items-center justify-center">Initializing Exam Session...</div>;
+    // --- RENDER ---
+    if (loading) return (
+        <div className="h-screen flex flex-col items-center justify-center space-y-4">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-xl font-semibold text-gray-700">Initializing Exam Session...</div>
+            <div className="text-sm text-gray-500">Please wait while we set up your secure environment.</div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="h-screen flex flex-col items-center justify-center p-8 bg-red-50">
+            <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center border-l-4 border-red-500">
+                <div className="text-4xl mb-4">⚠️</div>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Initialization Failed</h2>
+                <p className="text-red-600 mb-6">{error}</p>
+                <div className="flex justify-center gap-4">
+                    <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Retry</button>
+                    <button onClick={() => navigate('/dashboard')} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Back to Dashboard</button>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 select-none overflow-hidden flex flex-col">
