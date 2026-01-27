@@ -16,6 +16,7 @@ function RegisterPage() {
     role: 'STUDENT'
   });
   const [error, setError] = useState('');
+  const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -25,6 +26,7 @@ function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setErrors([]);
     setLoading(true);
 
     try {
@@ -37,7 +39,12 @@ function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          setErrors(data.details);
+        } else {
+          setError(data.error || 'Registration failed');
+        }
+        return;
       }
 
       // Success!
@@ -105,10 +112,19 @@ function RegisterPage() {
               <p className="text-gray-500 text-sm mb-6">Enter your details to create an account</p>
 
               {/* Error Message */}
-              {error && (
-                <div className="bg-red-900/20 border border-red-500/50 text-red-200 px-4 py-3 rounded mb-6 text-sm flex items-center">
-                  <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
-                  {error}
+              {(error || errors.length > 0) && (
+                <div className="bg-red-900/20 border border-red-500/50 text-red-200 px-4 py-3 rounded mb-6 text-sm">
+                  <div className="flex items-start">
+                    <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+                    <div>
+                      {error && <div>{error}</div>}
+                      {errors.length > 0 && (
+                        <ul className="list-disc pl-4 space-y-1 mt-1">
+                          {errors.map((err, idx) => <li key={idx}>{err}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -113,6 +113,24 @@ function TestPage() {
   };
 
   // --- 4. Render Logic ---
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const answeredCount = Object.keys(answers).length;
+  const markedCount = markedQuestions.length;
+  const totalCount = questions ? questions.length : 0;
+  const unansweredCount = totalCount - answeredCount;
 
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-lg">Loading Test...</div>;
@@ -146,6 +164,12 @@ function TestPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 select-none">
+
+      {!isOnline && (
+        <div className="bg-red-600 text-white text-center py-2 font-bold animate-pulse z-50">
+          ⚠️ No Internet Connection. Please check your network. Autosave may fail.
+        </div>
+      )}
 
       {/* Header / Timer */}
       {timeLeft !== null && <TimerDisplay seconds={timeLeft} />}
@@ -211,7 +235,7 @@ function TestPage() {
                 className={`px-4 py-2 border rounded font-medium transition
                   ${markedQuestions.includes(currentQuestionIndex)
                     ? 'bg-purple-100 text-purple-700 border-purple-300'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-700'}`}
               >
                 {markedQuestions.includes(currentQuestionIndex) ? 'Unmark Review' : 'Mark for Review'}
               </button>
@@ -231,11 +255,7 @@ function TestPage() {
 
               {currentQuestionIndex === questions.length - 1 ? (
                 <button
-                  onClick={() => {
-                    if (window.confirm("Are you sure you want to submit the test?")) {
-                      handleSubmit('COMPLETED');
-                    }
-                  }}
+                  onClick={() => setIsReviewModalOpen(true)}
                   className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-md transition"
                 >
                   Submit Test
@@ -287,6 +307,58 @@ function TestPage() {
           <p className="text-sm text-gray-500 mt-4">
             Please click <strong>OK</strong> to return to full-screen mode and continue the test.
           </p>
+        </div>
+      </Modal>
+
+      {/* Submission Review Modal */}
+      <Modal
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        title="Confirm Submission"
+        actions={
+          <>
+            <button onClick={() => setIsReviewModalOpen(false)} className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 font-medium text-gray-600">
+              Cancel
+            </button>
+            <button onClick={() => handleSubmit('COMPLETED')} className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg">
+              Yes, Submit Test
+            </button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+            <h4 className="font-bold text-gray-800 mb-2">Test Summary</h4>
+            <ul className="space-y-2 text-sm">
+              <li className="flex justify-between">
+                <span>Total Questions:</span>
+                <span className="font-bold">{totalCount}</span>
+              </li>
+              <li className="flex justify-between text-green-700">
+                <span>Answered:</span>
+                <span className="font-bold">{answeredCount}</span>
+              </li>
+              <li className="flex justify-between text-yellow-700">
+                <span>Marked for Review:</span>
+                <span className="font-bold">{markedCount}</span>
+              </li>
+              <li className="flex justify-between text-red-700">
+                <span>Unanswered:</span>
+                <span className="font-bold">{unansweredCount}</span>
+              </li>
+            </ul>
+          </div>
+
+          {unansweredCount > 0 && (
+            <p className="text-sm text-red-600 font-medium text-center">
+              You have skipped {unansweredCount} questions. Are you sure you want to submit?
+            </p>
+          )}
+          {unansweredCount === 0 && (
+            <p className="text-sm text-gray-600 text-center">
+              You have answered all questions. Ready to submit?
+            </p>
+          )}
         </div>
       </Modal>
     </div>

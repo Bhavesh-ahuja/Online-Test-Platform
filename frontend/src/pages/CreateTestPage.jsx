@@ -130,9 +130,14 @@ function CreateTestPage() {
     }
   };
 
+  const [error, setError] = useState('');
+  const [errors, setErrors] = useState([]);
+
   // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setErrors([]);
 
     // Validation
     if (testData.type === 'STANDARD') {
@@ -157,7 +162,7 @@ function CreateTestPage() {
         title: testData.title,
         description: testData.description,
         type: testData.type,
-        duration: parseInt(testData.duration, 10),
+        duration: parseInt(testData.duration, 10) || 30, // Fallback to 30 if NaN
         showResult: testData.showResult,
         scheduledStart: testData.scheduledStart ? new Date(testData.scheduledStart).toISOString() : null,
         scheduledEnd: testData.scheduledEnd ? new Date(testData.scheduledEnd).toISOString() : null,
@@ -180,11 +185,24 @@ function CreateTestPage() {
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error('Failed to create test');
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          setErrors(data.details);
+          window.scrollTo(0, 0); // Scroll to top to see errors
+        } else {
+          setError(data.error || 'Failed to create test');
+          window.scrollTo(0, 0);
+        }
+        return;
+      }
+
       alert('Test Created Successfully!');
       navigate('/dashboard');
     } catch (error) {
-      alert(error.message);
+      setError(error.message);
+      window.scrollTo(0, 0);
     }
   };
 
@@ -194,27 +212,70 @@ function CreateTestPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
 
-        {/* TYPE SELECTION */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <label htmlFor="assessment-type" className="block text-gray-700 font-bold mb-3">
-            Select Assessment Type
-          </label>
-          <select
-            id="assessment-type"
-            name="type"
-            value={testData.type}
-            onChange={(e) => {
-              const selectedType = e.target.value;
-              const defaultDuration = selectedType === 'STANDARD' ? 30 : 6;
-              setTestData({ ...testData, type: selectedType, duration: defaultDuration });
-            }}
-            className="w-full md:w-2/3 p-3 border-2 border-gray-300 rounded-lg bg-white text-gray-800 font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all cursor-pointer hover:border-gray-400"
-            required
-          >
-            <option value="STANDARD">📝 Standard Test - Custom MCQ/Short Answer questions</option>
-            <option value="SWITCH">🔄 AON Switch Challenge - Adaptive cognitive assessment</option>
-            <option value="DIGIT">🔢 Digit Challenge - Mathematical expression puzzles</option>
-          </select>
+        {/* Error Banner */}
+        {(error || errors.length > 0) && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  {error && <p>{error}</p>}
+                  {errors.length > 0 && (
+                    <ul className="list-disc pl-5 space-y-1">
+                      {errors.map((err, i) => <li key={i}>{err}</li>)}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TYPE SELECTION (Dropdown + Info Card) */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 space-y-4">
+
+          <div>
+            <label className="block text-gray-700 font-bold mb-2">Assessment Type</label>
+            <div className="relative">
+              <select
+                value={testData.type}
+                onChange={(e) => setTestData({ ...testData, type: e.target.value })}
+                className="w-full appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 pr-10 hover:bg-white transition-colors cursor-pointer"
+              >
+                <option value="STANDARD">📝 Standard Test (MCQ/Short Answer)</option>
+                <option value="SWITCH">🔄 AON Switch Challenge (Cognitive Game)</option>
+                {/* Future options can be easily added here */}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Info Card */}
+          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD'
+            ? 'bg-blue-50 border-blue-200 text-blue-900'
+            : 'bg-purple-50 border-purple-200 text-purple-900'
+            }`}>
+            <div className="text-3xl shrink-0">
+              {testData.type === 'STANDARD' ? '📝' : '🔄'}
+            </div>
+            <div>
+              <h3 className="font-bold text-lg mb-1">
+                {testData.type === 'STANDARD' ? 'Standard Assessment' : 'AON Switch Challenge'}
+              </h3>
+              <p className="text-sm opacity-90 leading-relaxed">
+                {testData.type === 'STANDARD'
+                  ? 'Create a traditional quiz with custom questions. Supports Multiple Choice and Short Answer formats. Perfect for knowledge verification and exams.'
+                  : 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* TABS (Only for Standard) */}

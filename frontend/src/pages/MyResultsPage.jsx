@@ -58,7 +58,8 @@ function MyResultsPage() {
                             {Submissions.map((sub) => (
                                 <tr key={sub.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {new Date(sub.createdAt).toLocaleDateString()}
+                                        {/* Use Switch Result timestamp if available (Completion Time), else fallback to Start Time */}
+                                        {new Date(sub.switchResult?.createdAt || sub.createdAt).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         {sub.test.title}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { FcGoogle } from "react-icons/fc"; 
-import { API_BASE_URL } from "../../config"; 
+import { FcGoogle } from "react-icons/fc";
+import { API_BASE_URL } from "../../config";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -21,6 +21,7 @@ function LoginPage() {
     password: "",
   });
   const [error, setError] = useState("");
+  const [errors, setErrors] = useState([]);
 
   // Handle Input
   const handleChange = (e) => {
@@ -34,6 +35,7 @@ function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setErrors([]);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -45,7 +47,12 @@ function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          setErrors(data.details);
+        } else {
+          setError(data.error || "Login failed");
+        }
+        return;
       }
 
       // --- SUCCESS ---
@@ -67,7 +74,7 @@ function LoginPage() {
 
       {/* --- MAIN CONTAINER --- */}
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-10 p-6 md:p-12 items-center">
-        
+
         {/* --- LEFT SIDE: TEXT & ACTIONS --- */}
         <div className="space-y-8 text-white">
           <div>
@@ -78,15 +85,6 @@ function LoginPage() {
               Hey welcome back! <br /> We hope you had a great day.
             </p>
           </div>
-
-          {/* Google Button (Visual only for now) */}
-          {/* <button
-            type="button"
-            className="flex items-center justify-center gap-3 w-fit px-8 py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full transition-all duration-300 backdrop-blur-sm"
-          >
-            <FcGoogle className="text-2xl" />
-            <span className="text-sm font-medium">Login with Google</span>
-          </button> */}
 
           {/* Register Link */}
           <div className="text-sm text-gray-400">
@@ -104,7 +102,7 @@ function LoginPage() {
         <div className="relative">
           {/* Subtle border gradient using a pseudo-element or container */}
           <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-            
+
             {/* Session Expired Alert */}
             {sessionExpired && (
               <div className="mb-6 bg-yellow-500/20 border border-yellow-500/50 text-yellow-200 px-4 py-3 rounded-lg text-sm">
@@ -113,9 +111,14 @@ function LoginPage() {
             )}
 
             {/* Error Alert */}
-            {error && (
+            {(error || errors.length > 0) && (
               <div className="mb-6 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm">
-                {error}
+                {error && <div>{error}</div>}
+                {errors.length > 0 && (
+                  <ul className="list-disc pl-5 mt-1 space-y-1">
+                    {errors.map((err, idx) => <li key={idx}>{err}</li>)}
+                  </ul>
+                )}
               </div>
             )}
 
@@ -163,7 +166,7 @@ function LoginPage() {
               </button>
             </form>
           </div>
-          
+
           {/* Decorative Glow behind the form */}
           <div className="absolute -inset-4 bg-gradient-to-r from-violet-600 to-blue-600 rounded-3xl blur-2xl opacity-20 -z-10" />
         </div>
