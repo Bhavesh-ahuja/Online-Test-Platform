@@ -1,21 +1,45 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generatePuzzleSet } from '../utils/digitGenerator';
 import { validateExpression } from '../utils/digitEngine';
+import {
+    DEFAULT_DURATION_SECONDS,
+    TOTAL_LEVELS,
+    MAX_CONSECUTIVE_FAILURES,
+    SCORE_MULTIPLIERS
+} from '../config/digitConfig';
 
 /**
  * Custom hook for Digit Challenge with dynamic puzzle generation
- * Generates 20 unique levels per test session
+ * 
+ * @param {number} userId - User ID for seeded random generation
+ * @param {number} testStartTime - Timestamp when test session started (for puzzle seed)
+ * @param {number} durationSeconds - Total test duration in seconds (configurable)
+ * 
+ * Timer Configuration:
+ * - The durationSeconds parameter allows admin-configurable test duration
+ * - Falls back to DEFAULT_DURATION_SECONDS (600s = 10 min) if not provided
+ * - This matches Switch Challenge behavior for consistency
+ * 
+ * @returns {Object} Game state and control functions
  */
-export function useDigitGame(userId, testStartTime) {
+export function useDigitGame(userId, testStartTime, durationSeconds = DEFAULT_DURATION_SECONDS) {
     // ==========================================
     // STATE MANAGEMENT
     // ==========================================
     const [currentLevel, setCurrentLevel] = useState(1);
     const [selectedDigits, setSelectedDigits] = useState([]);
-    const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes global timer
+
+    /**
+     * Global Timer (Configurable)
+     * - Default: 600 seconds (10 minutes) - matches Switch Challenge standard
+     * - Configurable via test settings (digitConfig.durationSeconds)
+     * - Auto-submits test when timer reaches 0
+     */
+    const [timeRemaining, setTimeRemaining] = useState(durationSeconds);
+
     const [totalScore, setTotalScore] = useState(0);
     const [levelScores, setLevelScores] = useState([]);
-    const [gameStatus, setGameStatus] = useState('idle'); // idle | playing | completed | timeout
+    const [gameStatus, setGameStatus] = useState('idle'); // idle | playing | completed | timeout | terminated
     const [feedback, setFeedback] = useState(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [puzzleSet, setPuzzleSet] = useState(null);
@@ -34,9 +58,31 @@ export function useDigitGame(userId, testStartTime) {
         consecutiveFailures: 0
     });
 
-    // Total number of levels
-    const TOTAL_LEVELS = 20;
-    const MAX_CONSECUTIVE_FAILURES = 3;
+    // ==========================================
+    // TIMER SYNCHRONIZATION
+    // ==========================================
+
+    /**
+     * CRITICAL: Sync timer when durationSeconds changes
+     * 
+     * This fixes the timing desynchronization bug where:
+     * 1. Component mounts with default duration (600s)
+     * 2. Test config is fetched async
+     * 3. setTestDuration updates durationSeconds
+     * 4. Timer must update to match configured duration
+     * 
+     * Without this effect, timer would remain stuck at initial (default) value
+     * even when test configuration specifies different duration.
+     * 
+     * This ensures: Timer duration is ALWAYS derived from test configuration (admin-defined),
+     * never from hardcoded defaults or stale state.
+     */
+    useEffect(() => {
+        if (gameStatus === 'idle' && durationSeconds > 0) {
+            console.log(`[useDigitGame] Timer sync: ${durationSeconds}s (${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`);
+            setTimeRemaining(durationSeconds);
+        }
+    }, [durationSeconds, gameStatus]);
 
     // ==========================================
     // PUZZLE GENERATION
@@ -70,7 +116,7 @@ export function useDigitGame(userId, testStartTime) {
     // ==========================================
 
     /**
-     * Start game - generates new puzzle set and resets state
+     * Start the game and initialize all game state
      */
     const startGame = useCallback(() => {
         const puzzles = initializePuzzles();
@@ -84,7 +130,20 @@ export function useDigitGame(userId, testStartTime) {
         setGameStatus('playing');
         setFeedback(null);
         setConsecutiveFailures(0);
-        setTimeRemaining(600); // 10 minutes
+
+        /**
+         * Timer Initialization (Configurable)
+         * 
+         * CRITICAL: Use durationSeconds from test configuration, NOT hardcoded value.
+         * This ensures UI timer matches admin-configured test duration.
+         * 
+         * If test config says 7 minutes → timer starts at 420 seconds
+         * If test config says 10 minutes → timer starts at 600 seconds
+         * 
+         * Source of truth: Test configuration (backend) → durationSeconds parameter
+         */
+        console.log(`[useDigitGame] Starting game with ${durationSeconds}s timer (${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`);
+        setTimeRemaining(durationSeconds);
         setStartTime(Date.now());
 
         // Reset metrics
@@ -97,7 +156,7 @@ export function useDigitGame(userId, testStartTime) {
             violations: 0,
             consecutiveFailures: 0
         };
-    }, [initializePuzzles]);
+    }, [initializePuzzles, durationSeconds]);
 
     /**
      * Start specific level
@@ -238,22 +297,25 @@ export function useDigitGame(userId, testStartTime) {
     // ==========================================
 
     /**
-     * Calculate score for completed level
-     * Formula: (Level)² / TimeTaken * SpeedMultiplier
+     * Calculate score for a completed level
+     * Formula: (Level² / TimeTaken) × SpeedMultiplier
+     * 
+     * @param {number} level - Level number
+     * @param {number} timeTakenSeconds - Time taken to solve
+     * @returns {number} - Calculated score
      */
-    function calculateLevelScore(levelId, timeTakenSeconds) {
+    const calculateLevelScore = (level, timeTakenSeconds) => {
         if (timeTakenSeconds <= 0) return 0;
 
-        const baseScore = Math.pow(levelId, 2) / timeTakenSeconds;
+        const baseScore = Math.pow(level, 2) / timeTakenSeconds;
 
-        // Speed bonus for fast completion
-        let speedMultiplier = 1.0;
-        if (timeTakenSeconds < 5) speedMultiplier = 1.5;
-        else if (timeTakenSeconds < 10) speedMultiplier = 1.2;
+        // Apply speed bonus from config
+        let speedMultiplier = SCORE_MULTIPLIERS.NORMAL; // >= 10 seconds
+        if (timeTakenSeconds < 5) speedMultiplier = SCORE_MULTIPLIERS.FAST;
+        else if (timeTakenSeconds < 10) speedMultiplier = SCORE_MULTIPLIERS.MEDIUM;
 
-        const finalScore = baseScore * speedMultiplier;
-        return Math.round(finalScore * 100) / 100;
-    }
+        return Math.round(baseScore * speedMultiplier * 100) / 100;
+    };
 
     // ==========================================
     // RETURN PUBLIC API

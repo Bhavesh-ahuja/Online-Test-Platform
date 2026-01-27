@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authFetch } from '../utils/authFetch';
 import { API_BASE_URL } from '../../config';
+import { DEFAULT_DURATION_SECONDS } from '../config/digitConfig';
 import Modal from '../components/Modal';
 import { useDigitGame } from '../hooks/useDigitGame';
 import { useKeyboardLock } from '../hooks/useKeyboardLock';
@@ -23,6 +24,13 @@ export default function DigitChallengePage() {
     const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [testStartTime, setTestStartTime] = useState(null);
+
+    /**
+     * Test Duration (Configurable)
+     * Read from test config with fallback to DEFAULT_DURATION_SECONDS
+     * Matches Switch Challenge configuration pattern
+     */
+    const [testDuration, setTestDuration] = useState(DEFAULT_DURATION_SECONDS);
 
     // Proctoring State
     const [warningCount, setWarningCount] = useState(0);
@@ -57,7 +65,7 @@ export default function DigitChallengePage() {
         removeLast,
         clearAll,
         submitAnswer
-    } = useDigitGame(user?.id, testStartTime);
+    } = useDigitGame(user?.id, testStartTime, testDuration);
 
     // ==========================================
     // COMPLIANCE ENFORCEMENT (Reused from Switch Challenge)
@@ -192,7 +200,7 @@ export default function DigitChallengePage() {
 
                 if (!mounted) return;
 
-                // 2. Fetch Config
+                // 2. Fetch Config (Read Timer Duration)
                 console.log("Fetching test config...");
                 const configRes = await authFetch(`/api/tests/${id}`);
                 console.log("Config response status:", configRes.status);
@@ -200,6 +208,16 @@ export default function DigitChallengePage() {
                 if (!configRes.ok) throw new Error('Failed to load test config');
                 const data = await configRes.json();
                 console.log("Config loaded:", data);
+
+                /**
+                 * Timer Configuration Priority (matches Switch Challenge):
+                 * 1. data.digitConfig?.durationSeconds (specific Digit Challenge config)
+                 * 2. data.duration * 60 (general test duration in minutes → seconds)
+                 * 3. DEFAULT_DURATION_SECONDS (600 = 10 minutes fallback)
+                 */
+                const totalSeconds = data.digitConfig?.durationSeconds || (data.duration * 60) || DEFAULT_DURATION_SECONDS;
+                setTestDuration(totalSeconds);
+                console.log(`Timer configured: ${totalSeconds}s (${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s)`);
 
                 // Set test start timestamp for puzzle generation
                 setTestStartTime(Date.now());
