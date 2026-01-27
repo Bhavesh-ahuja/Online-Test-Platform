@@ -130,9 +130,14 @@ function CreateTestPage() {
     }
   };
 
+  const [error, setError] = useState('');
+  const [errors, setErrors] = useState([]);
+
   // --- Submit ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setErrors([]);
 
     // Standard Validation
     if (testData.type === 'STANDARD') {
@@ -177,11 +182,24 @@ function CreateTestPage() {
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error('Failed to create test');
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          setErrors(data.details);
+          window.scrollTo(0, 0); // Scroll to top to see errors
+        } else {
+          setError(data.error || 'Failed to create test');
+          window.scrollTo(0, 0);
+        }
+        return;
+      }
+
       alert('Test Created Successfully!');
       navigate('/dashboard');
     } catch (error) {
-      alert(error.message);
+      setError(error.message);
+      window.scrollTo(0, 0);
     }
   };
 
@@ -190,6 +208,30 @@ function CreateTestPage() {
       <h1 className="text-3xl font-bold mb-6 text-gray-800">Create New Assessment</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+
+        {/* Error Banner */}
+        {(error || errors.length > 0) && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  {error && <p>{error}</p>}
+                  {errors.length > 0 && (
+                    <ul className="list-disc pl-5 space-y-1">
+                      {errors.map((err, i) => <li key={i}>{err}</li>)}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TYPE SELECTION */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">

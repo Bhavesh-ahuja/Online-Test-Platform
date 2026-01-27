@@ -9,6 +9,7 @@ const errorHandler = (err, req, res, next) => {
     res.status(err.statusCode).json({
         status: err.status,
         error: err.message,
+        details: err.errors || [], // New field for structured errors
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 };
