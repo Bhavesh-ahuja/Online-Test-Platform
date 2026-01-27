@@ -99,13 +99,17 @@ function DashboardPage() {
               {(() => {
                 const status = test.userStatus?.status;
                 const submissionId = test.userStatus?.submissionId;
-                const attempts = test.userStatus?.attemptCount || 0;
+                const attempts = test.attemptCount || 0;
 
                 const isResume = status === 'IN_PROGRESS';
                 const isCompleted = ['COMPLETED', 'TIMEOUT', 'TERMINATED'].includes(status);
-                const maxReached = test.attemptType === 'LIMITED' && attempts >= (test.maxAttempts || 1);
 
-                // 1. RESUME
+                // MAX REACHED LOGIC
+                let maxReached = false;
+                if (test.attemptType === 'ONCE' && attempts >= 1) maxReached = true;
+                if (test.attemptType === 'LIMITED' && attempts >= (test.maxAttempts || 1)) maxReached = true;
+
+                // 1. RESUME (Highest Priority)
                 if (isResume) {
                   return (
                     <button
@@ -123,39 +127,52 @@ function DashboardPage() {
                   );
                 }
 
-                // 2. VIEW RESULTS
+                // 2. VIEW RESULTS / COMPLETED
                 if (isCompleted) {
                   return (
                     <div className="flex gap-2">
-                      <Link
-                        to={`/test/results/${submissionId}`}
-                        className="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition text-center flex items-center justify-center text-sm font-medium"
-                      >
-                        📊 View Results
-                      </Link>
-
-                      {!maxReached && (
-                        <button
-                          onClick={() => {
-                            if (window.confirm("Start a new attempt?")) {
-                              if (test.type === 'SWITCH') {
-                                navigate(`/switch-challenge/${test.id}`);
-                              } else {
-                                navigate(`/test/${test.id}/instructions`);
-                              }
-                            }
-                          }}
-                          className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
-                          title="Start New Attempt"
+                      {/* VIEW RESULTS BUTTON - Only if allowed */}
+                      {test.showResult ? (
+                        <Link
+                          to={`/test/results/${submissionId}`}
+                          className="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition text-center flex items-center justify-center text-sm font-medium"
                         >
-                          ↻
-                        </button>
+                          📊 View Results
+                        </Link>
+                      ) : (
+                        <div className="flex-1 bg-gray-100 text-gray-500 py-2 rounded text-center text-sm font-medium border border-gray-200">
+                          ✅ Submitted
+                        </div>
                       )}
+
+                      {/* RETAKE BUTTON - Only if attempts remain */}
+                      {/* RETAKE BUTTON - Always visible, guarded click */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (maxReached) {
+                            alert("Maximum attempts reached");
+                            return;
+                          }
+                          if (window.confirm("Start a new attempt?")) {
+                            if (test.type === 'SWITCH') {
+                              navigate(`/switch-challenge/${test.id}`);
+                            } else {
+                              navigate(`/test/${test.id}/instructions`);
+                            }
+                          }
+                        }}
+                        className={`px-3 py-2 rounded text-sm font-medium ${maxReached ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                        title="Start New Attempt"
+                      >
+                        ↻
+                      </button>
                     </div>
                   );
                 }
 
-                // 3. LOCKED
+                // 3. LOCKED (Max Attempts Reached & Not currently active)
                 if (maxReached) {
                   return (
                     <div className="w-full py-2 bg-gray-100 text-gray-500 rounded text-center text-sm font-medium cursor-not-allowed border border-gray-200">

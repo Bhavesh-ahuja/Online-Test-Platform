@@ -117,6 +117,7 @@ function AdminResultsPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRN</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -130,8 +131,9 @@ function AdminResultsPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {sub.student.firstName} {sub.student.lastName}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sub.student.prn}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sub.student.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-bold">{sub.score}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{sub.score}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(sub.status)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(sub.createdAt).toLocaleString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

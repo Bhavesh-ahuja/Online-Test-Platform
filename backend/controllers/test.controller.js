@@ -1,6 +1,8 @@
 // test.controller.js
 import TestService from '../services/test.service.js';
 import catchAsync from '../utils/catchAsync.js';
+import prisma from '../lib/prisma.js';
+
 
 /* =========================
    CREATE TEST
@@ -65,9 +67,24 @@ export const submitTest = catchAsync(async (req, res) => {
 ========================= */
 export const getTestResult = catchAsync(async (req, res) => {
   const { submissionId } = req.params;
+   const user = await prisma.user.findUnique({
+    where: { id: req.user.userId },
+    select: { role: true }
+  });
+
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  const submission = await TestService.getTestResult(
+    submissionId,
+    req.user.userId,
+    user.role
+  );
   const studentId = req.user.userId;
-  const submission = await TestService.getTestResult(submissionId, studentId, req.user.role);
+
   res.json(submission);
+
 });
 
 export const getMySubmissions = catchAsync(async (req, res) => {

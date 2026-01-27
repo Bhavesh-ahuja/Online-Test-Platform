@@ -11,6 +11,7 @@ function RegisterPage() {
     firstName: '',
     lastName: '',
     email: '',
+
     password: '',
     role: 'STUDENT'
   });
@@ -172,6 +173,8 @@ function RegisterPage() {
                     onChange={handleChange}
                   />
                 </div>
+
+
 
                 {/* Role Selection */}
                 <div className="space-y-1">

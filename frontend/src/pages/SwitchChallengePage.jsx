@@ -58,6 +58,15 @@ export default function SwitchChallengePage() {
     // Only lock when game has actually started and we aren't showing the result modal
     // --- SECURITY ---
     // Aggressive logic is now inside useKeyboardLock
+    // --- PROCTORING HELPER (HOISTED) ---
+    const addWarning = useCallback(() => {
+        setWarningCount(prev => {
+            const newCount = prev + 1;
+            metricsRef.current.violations = newCount;
+            return newCount;
+        });
+    }, [metricsRef]);
+
     useKeyboardLock(hasStarted && !isSubmissionModalOpen, addWarning);
 
     // Refs
@@ -172,13 +181,7 @@ export default function SwitchChallengePage() {
     };
 
     // --- PROCTORING ---
-    const addWarning = useCallback(() => {
-        setWarningCount(prev => {
-            const newCount = prev + 1;
-            metricsRef.current.violations = newCount;
-            return newCount;
-        });
-    }, [metricsRef]);
+    // addWarning moved up due to dependency references
 
     useEffect(() => {
         if (warningCount >= MAX_WARNINGS && !isGameOver && !submitting) {

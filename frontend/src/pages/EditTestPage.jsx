@@ -17,7 +17,8 @@ function EditTestPage() {
     description: '',
     duration: 30,
     scheduledStart: '',
-    scheduledEnd: ''
+    scheduledEnd: '',
+    showResult: true
   });
 
   const [questions, setQuestions] = useState([]);
@@ -53,7 +54,8 @@ function EditTestPage() {
           description: data.description || '',
           duration: data.duration,
           scheduledStart: formatDate(data.scheduledStart),
-          scheduledEnd: formatDate(data.scheduledEnd)
+          scheduledEnd: formatDate(data.scheduledEnd),
+          showResult: data.showResult
         });
 
         // Load Attempt Config
@@ -74,10 +76,14 @@ function EditTestPage() {
   // --- Helpers ---
   const markDirty = () => setHasUnsavedChanges(true);
 
-  const handleTestChange = (e) => {
-    setTestData({ ...testData, [e.target.name]: e.target.value });
-    markDirty();
-  };
+ const handleTestChange = (e) => {
+  const { name, type, value, checked } = e.target;
+  setTestData({
+    ...testData,
+    [name]: type === 'checkbox' ? checked : value
+  });
+};
+
 
   const handleQuestionChange = (qi, field, value) => {
     const copy = [...questions];
@@ -86,6 +92,20 @@ function EditTestPage() {
     markDirty();
   };
 
+  const handleQuestionKeyDown = (e, qi) => {
+  if (e.key === 'Enter') {
+    if (e.shiftKey) {
+      // Allow default behavior (new line in textarea)
+      return;
+    } else {
+      // Prevent new line and move to next field
+      e.preventDefault();
+      // Target the first option input of the current question index
+      const nextField = document.querySelector(`input[name="q-${qi}-opt-0"]`);
+      if (nextField) nextField.focus();
+    }
+  }
+};
   const handleOptionChange = (qi, oi, value) => {
     const copy = [...questions];
 
@@ -167,6 +187,7 @@ function EditTestPage() {
           scheduledStart: localToUtc(testData.scheduledStart),
           scheduledEnd: localToUtc(testData.scheduledEnd),
           questions,
+          showResult: testData.showResult,
         }),
       });
 
@@ -311,6 +332,18 @@ function EditTestPage() {
               </button>
             )}
           </div>
+          <div className="flex items-center gap-2 mt-4">
+  <input
+    type="checkbox"
+    id="showResult"
+    className="w-4 h-4 accent-blue-600"
+    checked={testData.showResult}
+    onChange={(e) => setTestData({ ...testData, showResult: e.target.checked })}
+  />
+  <label htmlFor="showResult" className="text-sm font-medium text-gray-700">
+    Show result immediately after submission
+  </label>
+</div>
         </div>
 
         {/* --- QUESTIONS SECTION --- */}
@@ -333,15 +366,18 @@ function EditTestPage() {
               </button>
 
               <div className="mb-4">
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Question {qi + 1}</label>
-                <input
-                  className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white"
-                  value={q.text}
-                  onChange={(e) =>
-                    handleQuestionChange(qi, 'text', e.target.value)
-                  }
-                />
-              </div>
+  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+    Question {qi + 1}
+  </label>
+  <textarea
+    className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50 focus:bg-white resize-none"
+    placeholder="Enter question text... "
+    value={q.text}
+    onChange={(e) => handleQuestionChange(qi, 'text', e.target.value)}
+    onKeyDown={(e) => handleQuestionKeyDown(e, qi)}
+    required
+  />
+</div>
 
               <div className="space-y-2 mb-4">
                 <label className="block text-xs font-bold text-gray-400 uppercase">Options</label>
@@ -349,13 +385,13 @@ function EditTestPage() {
                   <div key={oi} className="flex gap-2 items-center">
                     <span className="text-gray-400 font-mono text-sm w-4">{String.fromCharCode(65 + oi)}</span>
                     <input
-                      className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
-                      placeholder={`Option ${oi + 1}`}
-                      value={opt}
-                      onChange={(e) =>
-                        handleOptionChange(qi, oi, e.target.value)
-                      }
-                    />
+  name={`q-${qi}-opt-${oi}`} // Add this name attribute
+  className="grow p-2 border rounded text-sm outline-none focus:border-blue-400"
+  placeholder={`Option ${oi + 1}`}
+  value={opt}
+  onChange={(e) => handleOptionChange(qi, oi, e.target.value)}
+  required
+/>
                     <button
                       type="button"
                       className="text-gray-300 hover:text-red-500 transition"

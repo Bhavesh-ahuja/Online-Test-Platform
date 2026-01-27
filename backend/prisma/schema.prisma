@@ -31,6 +31,7 @@ model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
+
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,7 +55,8 @@ model Test {
   scheduledEnd   DateTime?
   createdAt      DateTime  @default(now())
 
-  // New Features
+  showResult     Boolean   @default(true)
+
   attemptType AttemptType @default(ONCE)
   maxAttempts Int?
   
@@ -106,6 +108,7 @@ model TestSubmission {
 
   @@index([testId])
   @@index([studentId])
+  canViewResult Boolean @default(false)
 }
 
 model Answer {
