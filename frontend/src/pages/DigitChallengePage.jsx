@@ -99,8 +99,8 @@ function DigitChallengePage() {
                         {Array.from({ length: levelData.slots }).map((_, index) => (
                             <React.Fragment key={index}>
                                 <div className={`w-16 h-16 border-2 rounded-lg flex items-center justify-center text-2xl font-bold transition-all ${selectedDigits[index] !== undefined
-                                        ? 'bg-blue-50 border-blue-500 text-blue-700'
-                                        : 'bg-gray-50 border-gray-300 text-gray-400'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700'
+                                    : 'bg-gray-50 border-gray-300 text-gray-400'
                                     }`}>
                                     {selectedDigits[index] !== undefined ? selectedDigits[index] : '?'}
                                 </div>
@@ -118,23 +118,7 @@ function DigitChallengePage() {
                     </div>
                 </div>
 
-                {/* Feedback */}
-                {feedback && (
-                    <div className={`mb-6 p-4 rounded-lg text-center ${feedback.valid
-                            ? 'bg-green-50 border border-green-200 text-green-800'
-                            : 'bg-red-50 border border-red-200 text-red-800'
-                        }`}>
-                        <div className="font-bold mb-1">
-                            {feedback.valid ? '✓ Correct!' : '✗ ' + feedback.error}
-                        </div>
-                        <div className="text-sm">{feedback.message}</div>
-                        {feedback.expression && (
-                            <div className="text-xs mt-2 font-mono text-gray-600">
-                                {feedback.expression} = {feedback.result}
-                            </div>
-                        )}
-                    </div>
-                )}
+                {/* Feedback removed - assessment is silent until completion */}
 
                 {/* Digit Keypad */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
@@ -150,8 +134,8 @@ function DigitChallengePage() {
                                 onClick={() => !isDisabled && addDigit(digit)}
                                 disabled={isDisabled}
                                 className={`h-16 rounded-lg text-xl font-bold transition-all ${isDisabled
-                                        ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-gray-200'
-                                        : 'bg-white text-gray-800 hover:bg-blue-50 hover:border-blue-400 border-2 border-gray-300 active:scale-95 cursor-pointer'
+                                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-gray-200'
+                                    : 'bg-white text-gray-800 hover:bg-blue-50 hover:border-blue-400 border-2 border-gray-300 active:scale-95 cursor-pointer'
                                     }`}
                             >
                                 {digit}
@@ -174,8 +158,8 @@ function DigitChallengePage() {
                         onClick={submitAnswer}
                         disabled={selectedDigits.length !== levelData.slots}
                         className={`py-3 px-6 font-bold rounded-lg transition-all ${selectedDigits.length === levelData.slots
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             }`}
                     >
                         Submit
@@ -193,31 +177,22 @@ function DigitChallengePage() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
                         <div className="text-center">
-                            <div className="text-4xl mb-4">🎉</div>
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Challenge Complete!</h2>
-                            <div className="text-5xl font-bold text-blue-600 my-6">
-                                {totalScore.toFixed(2)}
-                            </div>
-                            <div className="text-sm text-gray-600 mb-6">Total Score</div>
+                            <div className="text-4xl mb-4">✓</div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Challenge Complete</h2>
+                            <div className="text-sm text-gray-600 mb-6">Assessment submitted successfully</div>
 
-                            {/* Level Breakdown */}
-                            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                                <div className="text-xs uppercase text-gray-400 font-bold mb-2">Level Scores</div>
-                                <div className="space-y-1">
-                                    {levelScores.map((score, idx) => (
-                                        <div key={idx} className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Level {idx + 1}</span>
-                                            <span className="font-bold text-gray-800">{score.toFixed(2)}</span>
-                                        </div>
-                                    ))}
+                            <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                                <div className="text-sm text-gray-500 mb-2">Final Score</div>
+                                <div className="text-5xl font-bold text-blue-600">
+                                    {totalScore.toFixed(2)}
                                 </div>
                             </div>
 
                             <button
-                                onClick={() => window.location.reload()}
+                                onClick={() => window.location.href = '/dashboard'}
                                 className="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-all"
                             >
-                                Play Again
+                                Return to Dashboard
                             </button>
                         </div>
                     </div>

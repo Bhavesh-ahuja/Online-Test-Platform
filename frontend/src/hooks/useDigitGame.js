@@ -60,11 +60,6 @@ export function useDigitGame() {
                 if (prev <= 1) {
                     clearInterval(timerRef.current);
                     setGameStatus('timeout');
-                    setFeedback({
-                        valid: false,
-                        error: 'TIMEOUT',
-                        message: 'Time expired! Moving to next level...'
-                    });
                     return 0;
                 }
                 return prev - 1;
@@ -102,7 +97,7 @@ export function useDigitGame() {
         const timeTaken = (Date.now() - startTime) / 1000;
         const validation = validateExpression(selectedDigits, levelData);
 
-        setFeedback(validation);
+        // Validation runs silently - no feedback shown during test
 
         if (validation.valid) {
             // Calculate score
@@ -115,10 +110,22 @@ export function useDigitGame() {
                 setGameStatus('completed');
                 clearInterval(timerRef.current);
             } else {
-                // Auto-advance to next level after 1.5s
+                // Auto-advance to next level after 500ms
                 setTimeout(() => {
                     startLevel(currentLevel + 1);
-                }, 1500);
+                }, 500);
+            }
+        } else {
+            // Wrong answer - record 0 for this level and move on
+            setLevelScores([...levelScores, 0]);
+
+            if (currentLevel === DIGIT_LEVELS.length) {
+                setGameStatus('completed');
+                clearInterval(timerRef.current);
+            } else {
+                setTimeout(() => {
+                    startLevel(currentLevel + 1);
+                }, 500);
             }
         }
 
@@ -131,7 +138,7 @@ export function useDigitGame() {
             // Record 0 score for timeout
             setLevelScores([...levelScores, 0]);
 
-            // Move to next level after 2s
+            // Move to next level after 500ms
             setTimeout(() => {
                 if (currentLevel < DIGIT_LEVELS.length) {
                     setGameStatus('playing');
@@ -139,7 +146,7 @@ export function useDigitGame() {
                 } else {
                     setGameStatus('completed');
                 }
-            }, 2000);
+            }, 500);
         }
     }, [gameStatus, currentLevel, levelScores, startLevel]);
 
