@@ -424,35 +424,31 @@ class TestService {
     }
 
     async getMySubmissions(studentId) {
-        // 1. Get Standard Submissions
-        const standardMatches = await prisma.testSubmission.findMany({
+        // Fetch all submissions for this user (both standard and switch)
+        // Since Switch Challenge results are linked to a TestSubmission, we only need to query one table.
+        const submissions = await prisma.testSubmission.findMany({
             where: { studentId },
             include: {
                 test: {
                     select: {
                         title: true,
                         type: true,
+                        // For standard tests count questions
                         _count: { select: { questions: true } }
+                    }
+                },
+                switchResult: {
+                    select: {
+                        score: true,
+                        metrics: true,
+                        createdAt: true // Include completion time
                     }
                 }
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        // 2. Get Switch Submissions
-        const switchMatches = await prisma.switchChallengeResult.findMany({
-            where: { userId: studentId },
-            include: {
-                test: {
-                    select: { title: true, type: true }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        // 3. Merge and Sort
-        const all = [...standardMatches, ...switchMatches].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        return all;
+        return submissions;
     }
 
     async getTestSubmissions(testId, page = 1, limit = 10, sortBy = 'score', order = 'desc') {
