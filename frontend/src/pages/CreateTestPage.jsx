@@ -13,7 +13,7 @@ function CreateTestPage() {
     showResult: true,
     scheduledStart: '',
     scheduledEnd: '',
-    type: 'STANDARD', // 'STANDARD' | 'SWITCH'
+    type: 'STANDARD', // 'STANDARD' | 'SWITCH' | 'DIGIT'
     // For Switch
     switchConfig: {
       durationSeconds: 360,
@@ -139,7 +139,7 @@ function CreateTestPage() {
     setError('');
     setErrors([]);
 
-    // Standard Validation
+    // Validation
     if (testData.type === 'STANDARD') {
       for (const q of questions) {
         if (!q.text || q.text.trim() === '') {
@@ -159,15 +159,18 @@ function CreateTestPage() {
 
     try {
       const payload = {
-        ...testData,
+        title: testData.title,
+        description: testData.description,
+        type: testData.type,
         duration: parseInt(testData.duration, 10) || 30, // Fallback to 30 if NaN
+        showResult: testData.showResult,
         scheduledStart: testData.scheduledStart ? new Date(testData.scheduledStart).toISOString() : null,
         scheduledEnd: testData.scheduledEnd ? new Date(testData.scheduledEnd).toISOString() : null,
         maxAttempts: maxAttempts ? parseInt(maxAttempts, 10) : null,
         attemptType,
-        questions: testData.type === 'STANDARD' ? questions : [], // Empty questions for Switch
+        questions: testData.type === 'STANDARD' ? questions : [], // Empty questions for Switch/Digit
 
-        // Sync Switch Config Duration
+        // Sync Switch Config Duration (only for SWITCH type)
         switchConfig: testData.type === 'SWITCH' ? {
           ...testData.switchConfig,
           durationSeconds: parseInt(testData.duration, 10) * 60
@@ -246,7 +249,7 @@ function CreateTestPage() {
               >
                 <option value="STANDARD">📝 Standard Test (MCQ/Short Answer)</option>
                 <option value="SWITCH">🔄 AON Switch Challenge (Cognitive Game)</option>
-                {/* Future options can be easily added here */}
+                <option value="DIGIT">🧮 AON Digit Challenge (Mathematical Puzzle)</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
@@ -255,21 +258,25 @@ function CreateTestPage() {
           </div>
 
           {/* Dynamic Info Card */}
-          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD'
-            ? 'bg-blue-50 border-blue-200 text-blue-900'
-            : 'bg-purple-50 border-purple-200 text-purple-900'
+          <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD' ? 'bg-blue-50 border-blue-200 text-blue-900' :
+              testData.type === 'SWITCH' ? 'bg-purple-50 border-purple-200 text-purple-900' :
+                'bg-green-50 border-green-200 text-green-900'
             }`}>
             <div className="text-3xl shrink-0">
-              {testData.type === 'STANDARD' ? '📝' : '🔄'}
+              {testData.type === 'STANDARD' ? '📝' : testData.type === 'SWITCH' ? '🔄' : '🧮'}
             </div>
             <div>
               <h3 className="font-bold text-lg mb-1">
-                {testData.type === 'STANDARD' ? 'Standard Assessment' : 'AON Switch Challenge'}
+                {testData.type === 'STANDARD' ? 'Standard Assessment' :
+                  testData.type === 'SWITCH' ? 'AON Switch Challenge' :
+                    'AON Digit Challenge'}
               </h3>
               <p className="text-sm opacity-90 leading-relaxed">
                 {testData.type === 'STANDARD'
                   ? 'Create a traditional quiz with custom questions. Supports Multiple Choice and Short Answer formats. Perfect for knowledge verification and exams.'
-                  : 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'}
+                  : testData.type === 'SWITCH'
+                    ? 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'
+                    : 'An advanced mathematical puzzle challenge with 20 progressive levels. Tests numerical reasoning and expression-building skills using dynamically generated digit puzzles. Each test session creates unique puzzles with increasing difficulty.'}
               </p>
             </div>
           </div>
@@ -298,7 +305,7 @@ function CreateTestPage() {
         )}
 
         {/* DETAILS SECTION */}
-        {(testData.type === 'SWITCH' || activeTab === 'details') && (
+        {(testData.type === 'SWITCH' || testData.type === 'DIGIT' || activeTab === 'details') && (
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 space-y-4 animate-fadeIn">
             <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
             <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
@@ -306,7 +313,15 @@ function CreateTestPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
-                <input type="number" min="1" className="w-full p-2 border rounded" name="duration" value={testData.duration} onChange={handleTestChange} required />
+                <input
+                  type="number"
+                  min={testData.type === 'SWITCH' || testData.type === 'DIGIT' ? "6" : "1"}
+                  className="w-full p-2 border rounded"
+                  name="duration"
+                  value={testData.duration}
+                  onChange={handleTestChange}
+                  required
+                />
               </div>
 
               <div>
@@ -356,6 +371,8 @@ function CreateTestPage() {
                 <p>This test will use the adaptive engine. Duration is set to 6 minutes by default but depends on the main timer.</p>
               </div>
             )}
+
+
           </div>
         )}
 

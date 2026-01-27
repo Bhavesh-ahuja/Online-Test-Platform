@@ -18,6 +18,7 @@ import AdminResultsPage from './pages/AdminResultsPage';
 import TestInstructions from './pages/TestInstructions';
 import ProfilePage from './pages/ProfilePage';
 import SwitchChallengePage from './pages/SwitchChallengePage';
+import DigitChallengePage from './pages/DigitChallengePage';
 import TestSubmitted from "./pages/TestSubmitted";
 
 
@@ -50,6 +51,14 @@ function AppRoutes() {
       <Route
         path="/switch-challenge/:id"
         element={<SwitchChallengePage />} /* Use ExamLayout? The page has its own layout logic */
+      />
+
+
+
+      {/* Digit Challenge Route */}
+      <Route
+        path="/digit-challenge/:id"
+        element={<DigitChallengePage />}
       />
     </Routes>
   );

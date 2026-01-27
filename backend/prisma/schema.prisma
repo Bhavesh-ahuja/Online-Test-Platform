@@ -130,6 +130,7 @@ model Answer {
 enum TestType {
   STANDARD
   SWITCH
+  DIGIT
 }
 
 model SwitchChallengeConfig {
