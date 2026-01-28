@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authFetch } from '../utils/authFetch';
-import { DEFAULT_DURATION_SECONDS, SHAPE_COLORS, SHAPE_LABELS } from '../config/geoSudoConfig';
+import { DEFAULT_DURATION_SECONDS, SHAPE_COLORS, SHAPE_LABELS, TOTAL_LEVELS } from '../config/geoSudoConfig';
 import Modal from '../components/Modal';
 import { useGeoSudoGame } from '../hooks/useGeoSudoGame';
 import { useKeyboardLock } from '../hooks/useKeyboardLock';
@@ -221,6 +221,8 @@ export default function GeoSudoChallengePage() {
                 maxLevel: metricsRef.current.maxLevel,
                 violations: metricsRef.current.violations || 0,
                 consecutiveFailures: metricsRef.current.consecutiveFailures,
+                streak: metricsRef.current.streak,
+                maxStreak: metricsRef.current.maxStreak,
                 reason: metricsRef.current.reason || 'COMPLETED'
             };
 
@@ -341,7 +343,7 @@ export default function GeoSudoChallengePage() {
                     <div className="flex items-center gap-6">
                         <h1 className="text-2xl font-bold">GeoSudo Challenge</h1>
                         <div className="text-sm">
-                            <span className="font-semibold">Level:</span> {currentLevel}/20
+                            <span className="font-semibold">Level:</span> {currentLevel}/{TOTAL_LEVELS}
                         </div>
                     </div>
                     <div className="flex items-center gap-6">
@@ -350,9 +352,6 @@ export default function GeoSudoChallengePage() {
                         </div>
                         <div className="text-sm">
                             <span className="font-semibold">Score:</span> {totalScore.toFixed(2)}
-                        </div>
-                        <div className={`text-sm ${warningCount > 0 ? 'text-red-300 font-bold' : ''}`}>
-                            Violations: {warningCount}/3
                         </div>
                     </div>
                 </div>
@@ -382,19 +381,21 @@ export default function GeoSudoChallengePage() {
                                                     w-20 h-20 rounded-lg flex items-center justify-center text-4xl font-bold
                                                     border-2 transition-all
                                                     ${isQuestionCell
-                                                        ? 'bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 ring-4 ring-orange-300/50 shadow-lg shadow-orange-500/50'
-                                                        : 'bg-slate-700 border-slate-600 hover:border-slate-500'
+                                                        ? 'bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 ring-4 ring-orange-300/50 shadow-lg shadow-orange-500/50 z-10'
+                                                        : cell
+                                                            ? 'bg-slate-700 border-slate-600'
+                                                            : 'bg-slate-800/50 border-slate-700/50 border-dashed'
                                                     }
                                                 `}
                                             >
                                                 {isQuestionCell ? (
-                                                    <span className="text-white text-5xl">?</span>
+                                                    <span className="text-white text-5xl animate-pulse">?</span>
                                                 ) : cell ? (
                                                     <span style={{ color: SHAPE_COLORS[cell] }}>
                                                         {SHAPE_LABELS[cell]}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-slate-600">-</span>
+                                                    <div className="w-10 h-10 border-2 border-slate-700 rounded-md bg-slate-900/30"></div>
                                                 )}
                                             </div>
                                         );

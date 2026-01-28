@@ -21,6 +21,7 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
     const [puzzleData, setPuzzleData] = useState(null);
     const [levelStartTime, setLevelStartTime] = useState(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+    const [streak, setStreak] = useState(0);
 
     // Metrics tracking
     const metricsRef = useRef({
@@ -31,6 +32,8 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
         maxLevel: 1,
         violations: 0,
         consecutiveFailures: 0,
+        streak: 0,
+        maxStreak: 0,
         reason: null
     });
 
@@ -40,11 +43,11 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
     /**
      * Calculate score for a level
      */
-    const calculateLevelScore = useCallback((level, timeTakenSeconds) => {
+    const calculateLevelScore = useCallback((level, timeTakenSeconds, currentStreak) => {
         if (timeTakenSeconds <= 0) return 0;
 
-        // Formula: (Level² / TimeTaken) × SpeedMultiplier
-        const baseScore = Math.pow(level, 2) / timeTakenSeconds;
+        // Base Formula: (Level² / TimeTaken)
+        const baseScore = Math.pow(level, 1.5) / (Math.log10(timeTakenSeconds + 1) + 1);
 
         // Apply speed bonus
         let speedMultiplier = SCORE_MULTIPLIERS.NORMAL;
@@ -54,7 +57,10 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
             speedMultiplier = SCORE_MULTIPLIERS.MEDIUM;
         }
 
-        const finalScore = baseScore * speedMultiplier;
+        // Streak Bonus: +5% per streak point (up to 50%)
+        const streakMultiplier = 1 + Math.min(currentStreak * 0.05, 0.5);
+
+        const finalScore = baseScore * speedMultiplier * streakMultiplier;
         return Math.round(finalScore * 100) / 100;
     }, []);
 
@@ -94,25 +100,15 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
     }, [userId, testStartTime, endGame]);
 
     /**
-     * Submit current answer (NO FEEDBACK VERSION)
+     * Submit current answer (Synchronous Evaluation)
      */
     const submitAnswer = useCallback(() => {
-        console.log('[GeoSudo] Submit Answer Called');
-        console.log('[GeoSudo] selectedShape:', selectedShape);
-        console.log('[GeoSudo] puzzleData:', puzzleData);
-        console.log('[GeoSudo] gameStatus:', gameStatus);
-
         if (!selectedShape || !puzzleData || gameStatus !== 'playing') {
-            console.warn('[GeoSudo] Submit blocked:', {
-                hasShape: !!selectedShape,
-                hasPuzzle: !!puzzleData,
-                status: gameStatus
-            });
             return;
         }
 
-        const timeTaken = (Date.now() - levelStartTime) / 1000;
-        console.log('[GeoSudo] Processing answer, time taken:', timeTaken);
+        const now = Date.now();
+        const timeTaken = (now - levelStartTime) / 1000;
 
         // Validate answer
         const validation = validateAnswer(
@@ -123,63 +119,59 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
             puzzleData.correctAnswer
         );
 
-        console.log('[GeoSudo] Validation result:', validation);
-
-        // Update metrics
+        // Update Global Metrics
         metricsRef.current.totalAttempts++;
         metricsRef.current.reactionTimes.push(timeTaken);
 
         if (validation.isCorrect) {
-            // CORRECT - Silent progression (NO FEEDBACK)
-            console.log('[GeoSudo] ✓ Correct answer!');
+            const newStreak = streak + 1;
+            setStreak(newStreak);
+            metricsRef.current.streak = newStreak;
+            metricsRef.current.maxStreak = Math.max(metricsRef.current.maxStreak, newStreak);
             metricsRef.current.correct++;
             metricsRef.current.maxLevel = Math.max(metricsRef.current.maxLevel, currentLevel);
 
-            // Calculate and add score
-            const levelScore = calculateLevelScore(currentLevel, timeTaken);
+            // Calculate score with streak bonus
+            const levelScore = calculateLevelScore(currentLevel, timeTaken, newStreak);
             setTotalScore(prev => prev + levelScore);
 
-            // Reset consecutive failures
+            // Reset failures on success
             setConsecutiveFailures(0);
 
-            // Move to next level or complete
+            // Advance or Finish
             if (currentLevel >= TOTAL_LEVELS) {
-                console.log('[GeoSudo] All levels completed!');
                 setGameStatus('completed');
                 endGame();
             } else {
                 const nextLevel = currentLevel + 1;
-                console.log(`[GeoSudo] Moving to level ${nextLevel}`);
                 setCurrentLevel(nextLevel);
                 setSelectedShape(null);
-                setLevelStartTime(Date.now());
-                const seed = `${userId}-${testStartTime}-${nextLevel}-${Date.now()}`;
+                setLevelStartTime(now);
+                const seed = `${userId}-${testStartTime}-${nextLevel}-${now}`;
                 const puzzle = generatePuzzle(nextLevel, seed);
                 setPuzzleData(puzzle);
             }
-
         } else {
-            // INCORRECT - Silent tracking (NO FEEDBACK)
-            console.log('[GeoSudo] ✗ Incorrect answer');
+            // INCORRECT
+            setStreak(0);
+            metricsRef.current.streak = 0;
             metricsRef.current.incorrect++;
-            const newConsecutiveFailures = consecutiveFailures + 1;
-            setConsecutiveFailures(newConsecutiveFailures);
-            metricsRef.current.consecutiveFailures = newConsecutiveFailures;
 
-            // Check for consecutive failure limit
-            if (newConsecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                console.log('[GeoSudo] Consecutive failure limit reached');
+            const newFailures = consecutiveFailures + 1;
+            setConsecutiveFailures(newFailures);
+            metricsRef.current.consecutiveFailures = newFailures;
+
+            if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
                 setGameStatus('terminated');
                 metricsRef.current.reason = 'CONSECUTIVE_FAILURES';
                 endGame();
             } else {
-                // Retry same level (NO FEEDBACK)
-                console.log(`[GeoSudo] Retry level ${currentLevel}, failures: ${newConsecutiveFailures}`);
+                // Retry same level
                 setSelectedShape(null);
-                setLevelStartTime(Date.now());
+                setLevelStartTime(now);
             }
         }
-    }, [selectedShape, puzzleData, gameStatus, levelStartTime, currentLevel, consecutiveFailures, calculateLevelScore, userId, testStartTime, endGame]);
+    }, [selectedShape, puzzleData, gameStatus, levelStartTime, currentLevel, consecutiveFailures, streak, calculateLevelScore, userId, testStartTime, endGame]);
 
     // Cleanup on unmount
     useEffect(() => {
