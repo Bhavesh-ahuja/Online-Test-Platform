@@ -108,7 +108,7 @@ export function useGeoSudoGame(userId, testStartTime) {
         const now = Date.now();
         const timeTaken = (now - levelStartTime) / 1000;
 
-        // Validate answer
+        // 1. Synchronous Validation
         const validation = validateAnswer(
             puzzleData.grid,
             selectedShape,
@@ -117,27 +117,32 @@ export function useGeoSudoGame(userId, testStartTime) {
             puzzleData.correctAnswer
         );
 
-        // Update Global Metrics
+        // 2. Metrics Tracking (Immediate)
         metricsRef.current.totalAttempts++;
         metricsRef.current.reactionTimes.push(timeTaken);
 
         if (validation.isCorrect) {
+            // SUCCESS FLOW
+            metricsRef.current.correct++;
+            metricsRef.current.maxLevel = Math.max(metricsRef.current.maxLevel, currentLevel);
+
+            // Reset failure counter immediately
+            setConsecutiveFailures(0);
+            metricsRef.current.consecutiveFailures = 0;
+
+            // Update streak state
             const newStreak = streak + 1;
             setStreak(newStreak);
             metricsRef.current.streak = newStreak;
             metricsRef.current.maxStreak = Math.max(metricsRef.current.maxStreak, newStreak);
-            metricsRef.current.correct++;
-            metricsRef.current.maxLevel = Math.max(metricsRef.current.maxLevel, currentLevel);
 
-            // Calculate score with streak bonus
+            // Calculate & update score
             const levelScore = calculateLevelScore(currentLevel, timeTaken, newStreak);
             setTotalScore(prev => prev + levelScore);
 
-            // Reset failures on success
-            setConsecutiveFailures(0);
-
             // Advance or Finish
             if (currentLevel >= TOTAL_LEVELS) {
+                metricsRef.current.reason = 'COMPLETED';
                 setIsGameOver(true);
             } else {
                 const nextLevel = currentLevel + 1;
@@ -149,25 +154,27 @@ export function useGeoSudoGame(userId, testStartTime) {
                 setPuzzleData(puzzle);
             }
         } else {
-            // INCORRECT
+            // FAILURE FLOW
+            metricsRef.current.incorrect++;
             setStreak(0);
             metricsRef.current.streak = 0;
-            metricsRef.current.incorrect++;
 
+            // Increment failure counter
             const newFailures = consecutiveFailures + 1;
             setConsecutiveFailures(newFailures);
             metricsRef.current.consecutiveFailures = newFailures;
 
+            // Check termination condition immediately
             if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
                 metricsRef.current.reason = 'CONSECUTIVE_FAILURES';
                 setIsGameOver(true);
-            } else {
-                // Retry same level
-                setSelectedShape(null);
-                setLevelStartTime(now);
             }
+
+            // Reset UI selection for retry (stay on same level)
+            setSelectedShape(null);
+            setLevelStartTime(now);
         }
-    }, [selectedShape, puzzleData, isGameOver, levelStartTime, currentLevel, consecutiveFailures, streak, calculateLevelScore, userId, testStartTime]);
+    }, [selectedShape, puzzleData, isGameOver, levelStartTime, currentLevel, streak, calculateLevelScore, userId, testStartTime]);
 
     // Cleanup on unmount
     useEffect(() => {

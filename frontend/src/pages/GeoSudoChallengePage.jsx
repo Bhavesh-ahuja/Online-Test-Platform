@@ -62,28 +62,26 @@ export default function GeoSudoChallengePage() {
     const addWarning = useCallback(() => {
         setWarningCount(prev => {
             const newCount = prev + 1;
-            if (metricsRef.current) {
-                metricsRef.current.violations = newCount;
-            }
+            metricsRef.current.violations = newCount;
             return newCount;
         });
     }, [metricsRef]);
 
     // Keyboard lock (anti-cheat)
-    useKeyboardLock(hasStarted && !isSubmissionModalOpen);
+    useKeyboardLock(hasStarted && !isSubmissionModalOpen, addWarning);
 
     // Tab/Window Switch Detection
     useEffect(() => {
-        if (!hasStarted) return;
-
         const handleVisibilityChange = () => {
-            if (document.hidden) {
+            if (document.hidden && hasStarted && !isGameOverPermanent) {
                 addWarning();
             }
         };
 
         const handleBlur = () => {
-            addWarning();
+            if (hasStarted && !isGameOverPermanent) {
+                addWarning();
+            }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -93,7 +91,7 @@ export default function GeoSudoChallengePage() {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('blur', handleBlur);
         };
-    }, [hasStarted, addWarning]);
+    }, [hasStarted, addWarning, isGameOverPermanent]);
 
     // Timer Logic
     useEffect(() => {
@@ -120,18 +118,18 @@ export default function GeoSudoChallengePage() {
         }
     }, [isGameOver, isGameOverPermanent, currentLevel, metricsRef]);
 
+    // Full Screen Enforcement
     useEffect(() => {
-        if (!hasStarted) return;
-
-        const checkFullscreen = () => {
-            if (!document.fullscreenElement) {
+        const handleFullScreenChange = () => {
+            if (!document.fullscreenElement && hasStarted && !isGameOverPermanent && !submitting) {
+                addWarning();
                 setIsFullScreenModalOpen(true);
             }
         };
 
-        document.addEventListener('fullscreenchange', checkFullscreen);
-        return () => document.removeEventListener('fullscreenchange', checkFullscreen);
-    }, [hasStarted]);
+        document.addEventListener('fullscreenchange', handleFullScreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    }, [hasStarted, isGameOverPermanent, submitting, addWarning]);
 
     // Enter fullscreen on start
     const handleEnterFullscreen = async () => {
@@ -472,6 +470,13 @@ export default function GeoSudoChallengePage() {
                                 ⚠️ Incorrect attempt detected. Continued mistakes may end the test.
                             </div>
                         )}
+
+                        {/* Violation Warning */}
+                        {warningCount > 0 && (
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-100 text-red-700 px-6 py-3 rounded-xl border border-red-200 font-bold shadow-lg z-50">
+                                ⚠️ Violation: {warningCount}/{MAX_WARNINGS}
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -494,14 +499,43 @@ export default function GeoSudoChallengePage() {
 
             <Modal isOpen={isSubmissionModalOpen} onClose={() => navigate('/dashboard')}>
                 <div className="text-center p-6">
-                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <span className="text-4xl">✅</span>
-                    </div>
-                    <h2 className="text-3xl font-bold text-gray-800 mb-2">Test Submitted!</h2>
-                    <p className="text-gray-600 mb-8">Your results have been securely recorded.</p>
+                    {submissionReason === 'TIMEOUT' ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="text-4xl">⏰</div>
+                            <h2 className="text-3xl font-bold text-gray-800">Time's Up!</h2>
+                            <p className="text-gray-600">Your test has been automatically submitted.</p>
+                            <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full font-bold text-sm">
+                                Status: TIMEOUT
+                            </div>
+                        </div>
+                    ) : submissionReason === 'VIOLATION_LIMIT' ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="text-4xl">⚠️</div>
+                            <h2 className="text-3xl font-bold text-red-600">Test Terminated</h2>
+                            <p className="text-gray-600">Maximum security violations reached.</p>
+                            <div className="bg-red-100 text-red-800 px-4 py-2 rounded-full font-bold text-sm">
+                                Status: TERMINATED
+                            </div>
+                        </div>
+                    ) : submissionReason === 'CONSECUTIVE_FAILURES' ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="text-4xl">🛑</div>
+                            <h2 className="text-3xl font-bold text-orange-600">Test Ended</h2>
+                            <p className="text-gray-600">You've reached the maximum number of consecutive mistakes.</p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <span className="text-4xl">✅</span>
+                            </div>
+                            <h2 className="text-3xl font-bold text-gray-800">Test Submitted!</h2>
+                            <p className="text-gray-600">Your results have been securely recorded.</p>
+                        </div>
+                    )}
+
                     <button
                         onClick={() => navigate('/dashboard')}
-                        className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-xl shadow-lg hover:bg-blue-700 transition-all"
+                        className="w-full mt-8 bg-blue-600 text-white py-4 rounded-xl font-bold text-xl shadow-lg hover:bg-blue-700 transition-all"
                     >
                         Return to Dashboard
                     </button>
