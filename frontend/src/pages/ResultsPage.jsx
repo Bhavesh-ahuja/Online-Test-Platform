@@ -16,16 +16,16 @@ function ResultsPage() {
         navigate('/login');
         return;
       }
-      
+
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/tests/results/${submissionId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.status === 403) {
-  navigate('/test-submitted', { replace: true });
-  return;
-}
+          navigate('/test-submitted', { replace: true });
+          return;
+        }
 
 
         if (response.status === 404) throw new Error('Results not found');
@@ -67,44 +67,88 @@ function ResultsPage() {
       {/* Score Header */}
       <div className="bg-white p-8 rounded-lg shadow-md mb-8 text-center">
         <h1 className="text-2xl font-bold mb-2">Results for {result.test.title}</h1>
-        <p className="text-5xl font-extrabold text-blue-600">
-          {result.score} / {result.test._count.questions}
-        </p>
-        <p className="text-gray-600 mt-2">
-          You scored {((result.score / result.test._count.questions) * 100).toFixed(0)}%
-        </p>
+
+        {result.test.type === 'SWITCH' ? (
+          <>
+            <p className="text-5xl font-extrabold text-blue-600">{result.switchResult?.score || result.score}</p>
+            <p className="text-gray-600 mt-2">Switch Challenge Score</p>
+            <p className="text-sm text-gray-500">Accuracy: {((result.switchResult?.accuracy || 0) * 100).toFixed(0)}%</p>
+          </>
+        ) : result.test.type === 'DIGIT' ? (
+          <>
+            <p className="text-5xl font-extrabold text-purple-600">{(result.digitResult?.score || result.score).toFixed(2)}</p>
+            <p className="text-gray-600 mt-2">Digit Challenge Score</p>
+            <p className="text-sm text-gray-500">Accuracy: {((result.digitResult?.accuracy || 0) * 100).toFixed(0)}%</p>
+          </>
+        ) : (
+          <>
+            <p className="text-5xl font-extrabold text-blue-600">
+              {result.score} / {result.test._count.questions}
+            </p>
+            <p className="text-gray-600 mt-2">
+              You scored {((result.score / result.test._count.questions) * 100).toFixed(0)}%
+            </p>
+          </>
+        )}
       </div>
 
-      {/* Detailed Answers */}
-      <div className="space-y-6">
-        <h2 className="text-xl font-semibold">Detailed Review</h2>
-        {result.answers.map((answer, index) => (
-          <div key={answer.id} className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">
-              Question {index + 1}: {answer.question.text}
-            </h3>
-
-            <div className="space-y-2">
-              {answer.question.options.map((option, oIndex) => (
-                <div
-                  key={oIndex}
-                  className={`p-3 rounded-lg border ${getAnswerClass(answer, option)}`}
-                >
-                  {option}
-                  {answer.question.correctAnswer === option && <span className="font-bold ml-2">(Correct)</span>}
-                  {answer.selectedAnswer === option && !answer.isCorrect && <span className="font-bold ml-2">(Your Answer)</span>}
-                </div>
-              ))}
+      {/* Challenge Metrics */}
+      {(result.test.type === 'SWITCH' || result.test.type === 'DIGIT') && (
+        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+          <h2 className="text-xl font-semibold mb-4">Performance Metrics</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-gray-50 rounded">
+              <strong className="text-gray-600">Max Level:</strong>
+              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.maxLevel || result.digitResult?.metrics?.maxLevel || 'N/A'}</span>
             </div>
-
-            {!answer.isCorrect && (
-              <div className="mt-4 p-3 bg-green-50 text-green-800 rounded-lg border border-green-200">
-                <strong>Correct Answer:</strong> {answer.question.correctAnswer}
-              </div>
-            )}
+            <div className="p-3 bg-gray-50 rounded">
+              <strong className="text-gray-600">Total Attempts:</strong>
+              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.totalAttempts || result.digitResult?.metrics?.totalAttempts || 'N/A'}</span>
+            </div>
+            <div className="p-3 bg-gray-50 rounded">
+              <strong className="text-gray-600">Correct:</strong>
+              <span className="ml-2 text-lg font-bold text-green-600">{result.switchResult?.metrics?.correct || result.digitResult?.metrics?.correct || 'N/A'}</span>
+            </div>
+            <div className="p-3 bg-gray-50 rounded">
+              <strong className="text-gray-600">Violations:</strong>
+              <span className="ml-2 text-lg font-bold text-red-600">{result.switchResult?.metrics?.violations || result.digitResult?.metrics?.violations || 0}</span>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Detailed Answers - Only for Standard Tests */}
+      {result.test.type === 'STANDARD' && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold">Detailed Review</h2>
+          {result.answers.map((answer, index) => (
+            <div key={answer.id} className="bg-white p-6 rounded-lg shadow-md">
+              <h3 className="text-lg font-semibold mb-4">
+                Question {index + 1}: {answer.question.text}
+              </h3>
+
+              <div className="space-y-2">
+                {answer.question.options.map((option, oIndex) => (
+                  <div
+                    key={oIndex}
+                    className={`p-3 rounded-lg border ${getAnswerClass(answer, option)}`}
+                  >
+                    {option}
+                    {answer.question.correctAnswer === option && <span className="font-bold ml-2">(Correct)</span>}
+                    {answer.selectedAnswer === option && !answer.isCorrect && <span className="font-bold ml-2">(Your Answer)</span>}
+                  </div>
+                ))}
+              </div>
+
+              {!answer.isCorrect && (
+                <div className="mt-4 p-3 bg-green-50 text-green-800 rounded-lg border border-green-200">
+                  <strong>Correct Answer:</strong> {answer.question.correctAnswer}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="text-center mt-8">
         <Link to="/dashboard" className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 transition">
