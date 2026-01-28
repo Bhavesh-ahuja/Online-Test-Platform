@@ -191,12 +191,20 @@ export function generatePuzzle(level, seed) {
     const tier = getTier(level);
 
     let currentSeed = seed;
-    while (true) {
+    let totalAttempts = 0;
+    const MAX_TOTAL_ATTEMPTS = 500; // Hard limit to prevent page freeze
+
+    while (totalAttempts < MAX_TOTAL_ATTEMPTS) {
         const seedStr = typeof currentSeed === 'string' ? currentSeed : String(currentSeed);
         const numericSeed = seedStr.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
         const random = new SeededRandom(numericSeed);
 
-        for (let attempt = 0; attempt < 100; attempt++) {
+        // Adaptive Constraints: Relax rules if we're struggling
+        const targetDepth = totalAttempts > 200 ? 1 : tier.minDepth;
+        const targetAnchors = totalAttempts > 300 ? 8 : (tier.maxAnchors ?? 8);
+
+        for (let attempt = 0; attempt < 20; attempt++) {
+            totalAttempts++;
             const completeGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
             if (!fillGrid(completeGrid, shapes, random)) continue;
 
@@ -208,7 +216,7 @@ export function generatePuzzle(level, seed) {
             puzzleGrid[questionRow][questionCol] = null;
 
             // 1. Mandatory Removals for Non-Triviality
-            if (level <= 5) {
+            if (level <= 5 && totalAttempts < 300) {
                 const rowOthers = [0, 1, 2, 3].filter(c => c !== questionCol);
                 const colOthers = [0, 1, 2, 3].filter(r => r !== questionRow);
                 const rSh = shuffle(rowOthers, random);
@@ -236,15 +244,17 @@ export function generatePuzzle(level, seed) {
                 puzzleGrid[r][c] = null;
 
                 let skip = false;
-                if (level <= 5) {
+                // Entry Check: No row/col with 3 knowns (only if not relaxed)
+                if (level <= 5 && totalAttempts < 100) {
                     for (let k = 0; k < 4; k++) {
                         const rK = puzzleGrid[k].filter(v => v !== null).length;
-                        let cK = 0;
-                        for (let cr = 0; cr < 4; cr++) if (puzzleGrid[cr][k] !== null) cK++;
-                        if (rK === 3 || cK === 3) skip = true;
+                        let colK = 0;
+                        for (let cr = 0; cr < 4; cr++) if (puzzleGrid[cr][k] !== null) colK++;
+                        if (rK === 3 || colK === 3) skip = true;
                     }
                 }
-                if (level >= 6 && countAnchors(puzzleGrid) > (tier.maxAnchors ?? 8)) skip = true;
+
+                if (level >= 6 && countAnchors(puzzleGrid) > targetAnchors) skip = true;
 
                 if (skip || countSolutionsForTarget(puzzleGrid, questionRow, questionCol, shapes) !== 1) {
                     puzzleGrid[r][c] = originalValue;
@@ -256,7 +266,8 @@ export function generatePuzzle(level, seed) {
             // 3. Final Metric Validation
             const deduction = analyzeDeduction(puzzleGrid, questionRow, questionCol, shapes);
             const anchors = countAnchors(puzzleGrid);
-            if (deduction.depth >= tier.minDepth && anchors <= (tier.maxAnchors ?? 8)) {
+
+            if (deduction.depth >= targetDepth && anchors <= targetAnchors) {
                 return {
                     grid: puzzleGrid,
                     questionRow,
@@ -264,10 +275,35 @@ export function generatePuzzle(level, seed) {
                     correctAnswer,
                     gridSize,
                     shapes,
-                    difficultyMetrics: { depth: deduction.depth, method: deduction.method, anchors }
+                    difficultyMetrics: {
+                        depth: deduction.depth,
+                        method: deduction.method,
+                        anchors
+                    }
                 };
             }
         }
+
         currentSeed = currentSeed + "-retry";
     }
+
+    // Absolute fallback: Return the simplest unique puzzle to break the loop
+    const fallbackGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
+    const random = new SeededRandom(numericSeed);
+    fillGrid(fallbackGrid, shapes, random);
+    const qR = random.nextInt(4);
+    const qC = random.nextInt(4);
+    const cA = fallbackGrid[qR][qC];
+    const finalGrid = fallbackGrid.map(row => [...row]);
+    finalGrid[qR][qC] = null;
+
+    return {
+        grid: finalGrid,
+        questionRow: qR,
+        questionCol: qC,
+        correctAnswer: cA,
+        gridSize,
+        shapes,
+        difficultyMetrics: { depth: 1, method: 'Fallback', anchors: 8 }
+    };
 }
