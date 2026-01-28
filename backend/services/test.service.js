@@ -191,7 +191,13 @@ class TestService {
                 message: 'Test started',
                 startTime: submission.createdAt,
                 submissionId: submission.id,
-                examSessionToken
+                examSessionToken,
+                test: {
+                    id: test.id,
+                    duration: test.duration,
+                    title: test.title,
+                    type: test.type
+                }
             };
         });
     }

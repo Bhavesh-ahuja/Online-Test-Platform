@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { authFetch } from '../utils/authFetch';
 import { DEFAULT_DURATION_SECONDS, SHAPE_COLORS, SHAPE_LABELS, TOTAL_LEVELS } from '../config/geoSudoConfig';
 import Modal from '../components/Modal';
+import { API_BASE_URL } from '../../config';
 import { useGeoSudoGame } from '../hooks/useGeoSudoGame';
 import { useKeyboardLock } from '../hooks/useKeyboardLock';
 
@@ -22,13 +23,14 @@ export default function GeoSudoChallengePage() {
     const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [testStartTime, setTestStartTime] = useState(null);
-    const [testDuration, setTestDuration] = useState(DEFAULT_DURATION_SECONDS);
+    const [testDuration, setTestDuration] = useState(0);
 
     // Proctoring State
     const [warningCount, setWarningCount] = useState(0);
     const [isFullScreenModalOpen, setIsFullScreenModalOpen] = useState(false);
 
-    // Modal State
+    const [timeLeft, setTimeLeft] = useState(null);
+    const [isGameOverPermanent, setIsGameOverPermanent] = useState(false);
     const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
     const [submissionReason, setSubmissionReason] = useState(null);
 
@@ -43,9 +45,8 @@ export default function GeoSudoChallengePage() {
     const {
         currentLevel,
         selectedShape,
-        timeRemaining,
         totalScore,
-        gameStatus,
+        isGameOver,
         puzzleData,
         consecutiveFailures,
         metricsRef,
@@ -53,7 +54,7 @@ export default function GeoSudoChallengePage() {
         submitAnswer,
         endGame,
         setSelectedShape
-    } = useGeoSudoGame(user?.id, testStartTime, testDuration);
+    } = useGeoSudoGame(user?.id, testStartTime);
 
     // ==========================================
     // COMPLIANCE ENFORCEMENT
@@ -94,7 +95,31 @@ export default function GeoSudoChallengePage() {
         };
     }, [hasStarted, addWarning]);
 
-    // Fullscreen Enforcement
+    // Timer Logic
+    useEffect(() => {
+        if (timeLeft === null || !hasStarted || isGameOverPermanent) return;
+
+        if (timeLeft <= 0) {
+            handleGameOver('TIMEOUT');
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setTimeLeft(prev => Math.max(0, prev - 1));
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [timeLeft, hasStarted, isGameOverPermanent]);
+
+    // Hook Game Over Trigger
+    useEffect(() => {
+        if (isGameOver && !isGameOverPermanent) {
+            const reason = metricsRef.current.reason ||
+                (currentLevel >= TOTAL_LEVELS ? 'COMPLETED' : 'TERMINATED');
+            handleGameOver(reason);
+        }
+    }, [isGameOver, isGameOverPermanent, currentLevel, metricsRef]);
+
     useEffect(() => {
         if (!hasStarted) return;
 
@@ -119,43 +144,82 @@ export default function GeoSudoChallengePage() {
     };
 
     // ==========================================
-    // AUTO-SUBMIT TRIGGERS
+    // SUBMISSION
     // ==========================================
-    // Timeout
-    useEffect(() => {
-        if (gameStatus === 'timeout' && !isSubmittingRef.current) {
-            setSubmissionReason('timer expired');
-            setIsSubmissionModalOpen(true);
-        }
-    }, [gameStatus]);
+    const handleGameOver = useCallback(async (reason) => {
+        if (isSubmittingRef.current || isGameOverPermanent) return;
+        isSubmittingRef.current = true;
+        setIsGameOverPermanent(true);
+        setSubmitting(true);
+        endGame();
 
+        try {
+            // Build submission data manually
+            const finalMetrics = {
+                totalAttempts: metricsRef.current.totalAttempts,
+                correct: metricsRef.current.correct,
+                incorrect: metricsRef.current.incorrect,
+                avgReactionMs: metricsRef.current.reactionTimes.length
+                    ? Math.round(metricsRef.current.reactionTimes.reduce((a, b) => a + b, 0) / metricsRef.current.reactionTimes.length * 1000)
+                    : 0,
+                maxLevel: metricsRef.current.maxLevel,
+                violations: metricsRef.current.violations || 0,
+                consecutiveFailures: metricsRef.current.consecutiveFailures,
+                streak: metricsRef.current.streak,
+                maxStreak: metricsRef.current.maxStreak,
+                reason: reason || metricsRef.current.reason || 'UNKNOWN'
+            };
+
+            const submissionData = {
+                finalScore: Math.round(totalScore * 100) / 100,
+                metrics: finalMetrics,
+                testType: 'GEOSUDO'
+            };
+
+            const response = await fetch(`${API_BASE_URL}/api/tests/${id}/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${examSessionTokenRef.current}`
+                },
+                body: JSON.stringify(submissionData)
+            });
+
+            if (response.ok) {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                }
+                setSubmitting(false);
+                setIsSubmissionModalOpen(true);
+            } else {
+                const err = await response.json();
+                console.error('Submission failed:', err);
+                alert(`Submission failed: ${err.message || 'Unknown error'}. Please try again.`);
+                setSubmitting(false);
+                isSubmittingRef.current = false;
+                setIsGameOverPermanent(false);
+            }
+        } catch (err) {
+            console.error('Submission failed:', err);
+            alert('Submission failed. Please check your connection and try again.');
+            setSubmitting(false);
+            isSubmittingRef.current = false;
+            setIsGameOverPermanent(false);
+        }
+    }, [id, totalScore, metricsRef, endGame, isGameOverPermanent]);
+
+    // ==========================================
+    // AUTO-SUBMIT TRIGGERS (Cleanup)
+    // ==========================================
     // Violation Limit
     useEffect(() => {
-        if (warningCount >= MAX_WARNINGS && gameStatus === 'playing' && !isSubmittingRef.current) {
-            endGame();
+        if (warningCount >= MAX_WARNINGS && hasStarted && !isSubmittingRef.current && !isGameOverPermanent) {
             if (metricsRef.current) {
                 metricsRef.current.reason = 'VIOLATION_LIMIT';
             }
-            setSubmissionReason('violation limit exceeded');
-            setIsSubmissionModalOpen(true);
+            handleGameOver('VIOLATION_LIMIT');
         }
-    }, [warningCount, gameStatus, endGame, metricsRef]);
-
-    // Consecutive Failures
-    useEffect(() => {
-        if (gameStatus === 'terminated' && !isSubmittingRef.current) {
-            setSubmissionReason('too many consecutive failures');
-            setIsSubmissionModalOpen(true);
-        }
-    }, [gameStatus]);
-
-    // Completion
-    useEffect(() => {
-        if (gameStatus === 'completed' && !isSubmittingRef.current) {
-            setSubmissionReason('all levels completed');
-            setIsSubmissionModalOpen(true);
-        }
-    }, [gameStatus]);
+    }, [warningCount, hasStarted, handleGameOver, metricsRef, isGameOverPermanent]);
 
     // ==========================================
     // EXAM SESSION INITIALIZATION
@@ -166,14 +230,19 @@ export default function GeoSudoChallengePage() {
 
         const initializeExam = async () => {
             try {
-                const response = await authFetch(`/api/tests/start/${id}`);
-                examSessionTokenRef.current = response.examSessionToken;
+                const res = await authFetch(`/api/tests/${id}/start`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to start test session');
+                const responseData = await res.json();
+
+                examSessionTokenRef.current = responseData.examSessionToken;
 
                 // Get test configuration for duration
-                const testConfig = response.test;
-                if (testConfig && testConfig.duration) {
-                    setTestDuration(testConfig.duration * 60); // Convert minutes to seconds
-                }
+                const testData = responseData.test;
+                const duration = testData?.duration || 30; // Fallback to 30 mins
+                const durationSeconds = duration * 60;
+
+                setTestDuration(durationSeconds);
+                setTimeLeft(durationSeconds);
 
                 setTestStartTime(Date.now());
                 setLoading(false);
@@ -201,58 +270,6 @@ export default function GeoSudoChallengePage() {
         }
     };
 
-    // ==========================================
-    // SUBMISSION
-    // ==========================================
-    const handleGameOver = useCallback(async () => {
-        if (isSubmittingRef.current) return;
-        isSubmittingRef.current = true;
-        setSubmitting(true);
-
-        try {
-            // Build submission data manually
-            const finalMetrics = {
-                totalAttempts: metricsRef.current.totalAttempts,
-                correct: metricsRef.current.correct,
-                incorrect: metricsRef.current.incorrect,
-                avgReactionMs: metricsRef.current.reactionTimes.length
-                    ? Math.round(metricsRef.current.reactionTimes.reduce((a, b) => a + b, 0) / metricsRef.current.reactionTimes.length * 1000)
-                    : 0,
-                maxLevel: metricsRef.current.maxLevel,
-                violations: metricsRef.current.violations || 0,
-                consecutiveFailures: metricsRef.current.consecutiveFailures,
-                streak: metricsRef.current.streak,
-                maxStreak: metricsRef.current.maxStreak,
-                reason: metricsRef.current.reason || 'COMPLETED'
-            };
-
-            const submissionData = {
-                finalScore: Math.round(totalScore * 100) / 100,
-                metrics: finalMetrics,
-                testType: 'GEOSUDO'
-            };
-
-            await authFetch(`/api/tests/submit/${id}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Exam-Session-Token': examSessionTokenRef.current
-                },
-                body: JSON.stringify(submissionData)
-            });
-
-            if (document.fullscreenElement) {
-                await document.exitFullscreen();
-            }
-
-            navigate(`/dashboard`);
-        } catch (err) {
-            console.error('Submission failed:', err);
-            alert('Submission failed. Please try again.');
-            setSubmitting(false);
-            isSubmittingRef.current = false;
-        }
-    }, [id, navigate, totalScore, metricsRef]);
 
     // ==========================================
     // RENDER: LOADING STATE
@@ -347,8 +364,8 @@ export default function GeoSudoChallengePage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-6">
-                        <div className={`text-xl font-bold ${timeRemaining < 60 ? 'text-yellow-300 animate-pulse' : ''}`}>
-                            {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                        <div className={`text-xl font-bold ${(timeLeft || 0) < 60 ? 'text-yellow-300 animate-pulse' : ''}`}>
+                            {Math.floor((timeLeft || 0) / 60)}:{((timeLeft || 0) % 60).toString().padStart(2, '0')}
                         </div>
                         <div className="text-sm">
                             <span className="font-semibold">Score:</span> {totalScore.toFixed(2)}
@@ -441,7 +458,7 @@ export default function GeoSudoChallengePage() {
                             </button>
                             <button
                                 onClick={submitAnswer}
-                                disabled={!selectedShape}
+                                disabled={!selectedShape || isGameOverPermanent}
                                 className="px-8 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold rounded-lg hover:from-orange-700 hover:to-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                             >
                                 Submit Answer
@@ -449,8 +466,12 @@ export default function GeoSudoChallengePage() {
                         </div>
 
 
-                        {/* Consecutive Failures Warning - HIDDEN DURING TEST */}
-                        {/* Internal tracking only */}
+                        {/* Consecutive Failures Warning */}
+                        {consecutiveFailures >= 1 && (
+                            <div className="absolute top-20 bg-amber-100 text-amber-800 px-6 py-3 rounded-xl border border-amber-200 font-bold shadow-lg animate-bounce z-50">
+                                ⚠️ Incorrect attempt detected. Continued mistakes may end the test.
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -471,19 +492,18 @@ export default function GeoSudoChallengePage() {
                 </div>
             </Modal>
 
-            <Modal isOpen={isSubmissionModalOpen} onClose={() => { }}>
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold text-orange-600 mb-4">Test Completed</h2>
-                    <p className="text-gray-700 mb-2">Reason: {submissionReason}</p>
-                    <p className="text-lg font-semibold text-gray-800 mb-6">
-                        Final Score: <span className="text-orange-600">{totalScore.toFixed(2)}</span>
-                    </p>
+            <Modal isOpen={isSubmissionModalOpen} onClose={() => navigate('/dashboard')}>
+                <div className="text-center p-6">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="text-4xl">✅</span>
+                    </div>
+                    <h2 className="text-3xl font-bold text-gray-800 mb-2">Test Submitted!</h2>
+                    <p className="text-gray-600 mb-8">Your results have been securely recorded.</p>
                     <button
-                        onClick={handleGameOver}
-                        disabled={submitting}
-                        className="w-full bg-orange-600 text-white py-3 rounded-lg hover:bg-orange-700 transition disabled:opacity-50"
+                        onClick={() => navigate('/dashboard')}
+                        className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-xl shadow-lg hover:bg-blue-700 transition-all"
                     >
-                        {submitting ? 'Submitting...' : 'Submit Results'}
+                        Return to Dashboard
                     </button>
                 </div>
             </Modal>

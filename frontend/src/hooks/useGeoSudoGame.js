@@ -11,13 +11,12 @@ import {
  * GeoSudo Game Hook - STABLE VERSION
  * Matches Digit Challenge pattern
  */
-export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
+export function useGeoSudoGame(userId, testStartTime) {
     // Core game state
     const [currentLevel, setCurrentLevel] = useState(1);
     const [selectedShape, setSelectedShape] = useState(null);
-    const [timeRemaining, setTimeRemaining] = useState(durationSeconds);
     const [totalScore, setTotalScore] = useState(0);
-    const [gameStatus, setGameStatus] = useState('idle'); // idle, playing, completed, timeout, terminated
+    const [isGameOver, setIsGameOver] = useState(false);
     const [puzzleData, setPuzzleData] = useState(null);
     const [levelStartTime, setLevelStartTime] = useState(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
@@ -36,9 +35,6 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
         maxStreak: 0,
         reason: null
     });
-
-    // Timer reference
-    const timerRef = useRef(null);
 
     /**
      * Calculate score for a level
@@ -68,42 +64,44 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
      * End the game
      */
     const endGame = useCallback(() => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
+        setIsGameOver(true);
     }, []);
 
     /**
      * Start the game
      */
     const startGame = useCallback(() => {
-        setGameStatus('playing');
+        setIsGameOver(false);
+        setTotalScore(0);
+        setCurrentLevel(1);
+        setConsecutiveFailures(0);
+        setStreak(0);
         setLevelStartTime(Date.now());
+
+        metricsRef.current = {
+            totalAttempts: 0,
+            correct: 0,
+            incorrect: 0,
+            reactionTimes: [],
+            maxLevel: 1,
+            violations: 0,
+            consecutiveFailures: 0,
+            streak: 0,
+            maxStreak: 0,
+            reason: null
+        };
 
         // Generate first puzzle with dynamic seed
         const seed = `${userId}-${testStartTime}-${Date.now()}`;
         const puzzle = generatePuzzle(1, seed);
         setPuzzleData(puzzle);
-
-        // Start timer
-        timerRef.current = setInterval(() => {
-            setTimeRemaining(prev => {
-                if (prev <= 1) {
-                    setGameStatus('timeout');
-                    endGame();
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    }, [userId, testStartTime, endGame]);
+    }, [userId, testStartTime]);
 
     /**
      * Submit current answer (Synchronous Evaluation)
      */
     const submitAnswer = useCallback(() => {
-        if (!selectedShape || !puzzleData || gameStatus !== 'playing') {
+        if (!selectedShape || !puzzleData || isGameOver) {
             return;
         }
 
@@ -140,8 +138,7 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
 
             // Advance or Finish
             if (currentLevel >= TOTAL_LEVELS) {
-                setGameStatus('completed');
-                endGame();
+                setIsGameOver(true);
             } else {
                 const nextLevel = currentLevel + 1;
                 setCurrentLevel(nextLevel);
@@ -162,23 +159,19 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
             metricsRef.current.consecutiveFailures = newFailures;
 
             if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
-                setGameStatus('terminated');
                 metricsRef.current.reason = 'CONSECUTIVE_FAILURES';
-                endGame();
+                setIsGameOver(true);
             } else {
                 // Retry same level
                 setSelectedShape(null);
                 setLevelStartTime(now);
             }
         }
-    }, [selectedShape, puzzleData, gameStatus, levelStartTime, currentLevel, consecutiveFailures, streak, calculateLevelScore, userId, testStartTime, endGame]);
+    }, [selectedShape, puzzleData, isGameOver, levelStartTime, currentLevel, consecutiveFailures, streak, calculateLevelScore, userId, testStartTime]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-            }
         };
     }, []);
 
@@ -186,9 +179,8 @@ export function useGeoSudoGame(userId, testStartTime, durationSeconds) {
         // State
         currentLevel,
         selectedShape,
-        timeRemaining,
         totalScore,
-        gameStatus,
+        isGameOver,
         puzzleData,
         consecutiveFailures,
         metricsRef,
