@@ -1,6 +1,6 @@
 /**
- * GeoSudo Puzzle Generator
- * Generates valid geometric sudoku puzzles with unique solutions
+ * GeoSudo Puzzle Generator - STABLE VERSION
+ * Single question mark per level - WORKING STATE
  */
 
 import { SHAPES, getShapesForGrid } from '../config/geoSudoConfig';
@@ -84,35 +84,14 @@ function fillGrid(grid, shapes, random) {
 }
 
 /**
- * Find all possible solutions for a cell
- */
-function getPossibleShapes(grid, row, col, shapes) {
-    const possible = [];
-
-    for (const shape of shapes) {
-        if (isValidPlacement(grid, row, col, shape)) {
-            possible.push(shape);
-        }
-    }
-
-    return possible;
-}
-
-/**
- * Generate a complete valid puzzle
- * @param {number} level - Current level (1-20)
- * @param {number} seed - Random seed for reproducibility
- * @returns {{grid: Array, questionRow: number, questionCol: number, correctAnswer: string}}
+ * Generate a complete valid puzzle with single question mark
+ * STABLE - WORKING VERSION
  */
 export function generatePuzzle(level, seed) {
-    // Determine grid size based on level
-    let gridSize;
-    if (level <= 5) gridSize = 3;      // BASIC
-    else if (level <= 15) gridSize = 4; // INTERMEDIATE & ADVANCED
-    else gridSize = 5;                  // EXPERT
-
+    // Fixed 4x4 grid for stability
+    const gridSize = 4;
     const shapes = getShapesForGrid(gridSize);
-    const random = new SeededRandom(seed);
+    const random = new SeededRandom(typeof seed === 'string' ? seed.split('').reduce((a, b) => a + b.charCodeAt(0), 0) : seed);
 
     // Create empty grid
     const completeGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
@@ -120,46 +99,15 @@ export function generatePuzzle(level, seed) {
     // Fill grid completely
     fillGrid(completeGrid, shapes, random);
 
-    // Choose a cell to remove (create the question mark)
-    // For harder levels, choose cells with more constraints
-    let questionRow, questionCol;
-
-    if (level <= 5) {
-        // Easy: any random cell
-        questionRow = random.nextInt(gridSize);
-        questionCol = random.nextInt(gridSize);
-    } else {
-        // Harder: prefer cells in middle or with more filled neighbors
-        const candidates = [];
-        for (let r = 0; r < gridSize; r++) {
-            for (let c = 0; c < gridSize; c++) {
-                // Prefer middle cells
-                const distFromCenter = Math.abs(r - Math.floor(gridSize / 2)) + Math.abs(c - Math.floor(gridSize / 2));
-                if (distFromCenter <= 1) {
-                    candidates.push({ r, c });
-                }
-            }
-        }
-        const chosen = candidates[random.nextInt(candidates.length)];
-        questionRow = chosen.r;
-        questionCol = chosen.c;
-    }
-
+    // Choose a random cell to remove (single question mark)
+    const questionRow = random.nextInt(gridSize);
+    const questionCol = random.nextInt(gridSize);
     const correctAnswer = completeGrid[questionRow][questionCol];
 
     // Create puzzle grid with null at the question position
     const puzzleGrid = completeGrid.map((row, r) =>
         row.map((cell, c) => (r === questionRow && c === questionCol) ? null : cell)
     );
-
-    // Verify uniqueness of solution
-    const possibleAnswers = getPossibleShapes(puzzleGrid, questionRow, questionCol, shapes);
-
-    if (possibleAnswers.length !== 1) {
-        console.warn(`Puzzle generated with ${possibleAnswers.length} solutions, regenerating...`);
-        // In production, retry with different seed
-        return generatePuzzle(level, seed + 1);
-    }
 
     return {
         grid: puzzleGrid,

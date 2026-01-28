@@ -48,16 +48,11 @@ export default function GeoSudoChallengePage() {
         gameStatus,
         puzzleData,
         consecutiveFailures,
-        showFeedback,
-        feedbackMessage,
-        isCorrectAnswer,
-        violations,
+        metricsRef,
         startGame,
         submitAnswer,
         endGame,
-        handleViolation,
-        setSelectedShape,
-        getSubmissionData
+        setSelectedShape
     } = useGeoSudoGame(user?.id, testStartTime, testDuration);
 
     // ==========================================
@@ -66,10 +61,12 @@ export default function GeoSudoChallengePage() {
     const addWarning = useCallback(() => {
         setWarningCount(prev => {
             const newCount = prev + 1;
-            handleViolation();
+            if (metricsRef.current) {
+                metricsRef.current.violations = newCount;
+            }
             return newCount;
         });
-    }, [handleViolation]);
+    }, [metricsRef]);
 
     // Keyboard lock (anti-cheat)
     useKeyboardLock(hasStarted && !isSubmissionModalOpen);
@@ -135,11 +132,14 @@ export default function GeoSudoChallengePage() {
     // Violation Limit
     useEffect(() => {
         if (warningCount >= MAX_WARNINGS && gameStatus === 'playing' && !isSubmittingRef.current) {
-            endGame('VIOLATION_LIMIT');
+            endGame();
+            if (metricsRef.current) {
+                metricsRef.current.reason = 'VIOLATION_LIMIT';
+            }
             setSubmissionReason('violation limit exceeded');
             setIsSubmissionModalOpen(true);
         }
-    }, [warningCount, gameStatus, endGame]);
+    }, [warningCount, gameStatus, endGame, metricsRef]);
 
     // Consecutive Failures
     useEffect(() => {
@@ -210,7 +210,25 @@ export default function GeoSudoChallengePage() {
         setSubmitting(true);
 
         try {
-            const submissionData = getSubmissionData();
+            // Build submission data manually
+            const finalMetrics = {
+                totalAttempts: metricsRef.current.totalAttempts,
+                correct: metricsRef.current.correct,
+                incorrect: metricsRef.current.incorrect,
+                avgReactionMs: metricsRef.current.reactionTimes.length
+                    ? Math.round(metricsRef.current.reactionTimes.reduce((a, b) => a + b, 0) / metricsRef.current.reactionTimes.length * 1000)
+                    : 0,
+                maxLevel: metricsRef.current.maxLevel,
+                violations: metricsRef.current.violations || 0,
+                consecutiveFailures: metricsRef.current.consecutiveFailures,
+                reason: metricsRef.current.reason || 'COMPLETED'
+            };
+
+            const submissionData = {
+                finalScore: Math.round(totalScore * 100) / 100,
+                metrics: finalMetrics,
+                testType: 'GEOSUDO'
+            };
 
             await authFetch(`/api/tests/submit/${id}`, {
                 method: 'POST',
@@ -232,7 +250,7 @@ export default function GeoSudoChallengePage() {
             setSubmitting(false);
             isSubmittingRef.current = false;
         }
-    }, [id, navigate, getSubmissionData]);
+    }, [id, navigate, totalScore, metricsRef]);
 
     // ==========================================
     // RENDER: LOADING STATE
@@ -393,7 +411,6 @@ export default function GeoSudoChallengePage() {
                                     <button
                                         key={shape}
                                         onClick={() => setSelectedShape(shape)}
-                                        disabled={showFeedback}
                                         className={`
                                             w-20 h-20 rounded-lg text-4xl font-bold
                                             border-3 transition-all transform
@@ -401,7 +418,7 @@ export default function GeoSudoChallengePage() {
                                                 ? 'bg-orange-600 border-orange-400 scale-110 ring-4 ring-orange-400/50 shadow-lg'
                                                 : 'bg-slate-700 border-slate-600 hover:border-orange-400 hover:scale-105'
                                             }
-                                            ${showFeedback ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'}
+                                            hover:shadow-xl
                                         `}
                                     >
                                         <span style={{ color: SHAPE_COLORS[shape] }}>
@@ -416,34 +433,23 @@ export default function GeoSudoChallengePage() {
                         <div className="flex justify-center gap-4">
                             <button
                                 onClick={() => setSelectedShape(null)}
-                                disabled={!selectedShape || showFeedback}
+                                disabled={!selectedShape}
                                 className="px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Clear Selection
                             </button>
                             <button
                                 onClick={submitAnswer}
-                                disabled={!selectedShape || showFeedback}
+                                disabled={!selectedShape}
                                 className="px-8 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold rounded-lg hover:from-orange-700 hover:to-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                             >
                                 Submit Answer
                             </button>
                         </div>
 
-                        {/* Feedback */}
-                        {showFeedback && (
-                            <div className={`mt-6 p-4 rounded-lg text-center font-semibold ${isCorrectAnswer ? 'bg-green-500/20 text-green-300 border-2 border-green-500' : 'bg-red-500/20 text-red-300 border-2 border-red-500'
-                                }`}>
-                                {feedbackMessage}
-                            </div>
-                        )}
 
-                        {/* Consecutive Failures Warning */}
-                        {consecutiveFailures > 0 && (
-                            <div className="mt-4 p-4 bg-red-500/20 border-2 border-red-500 rounded-lg text-center text-red-300 font-semibold">
-                                ⚠️ Consecutive Failures: {consecutiveFailures}/3
-                            </div>
-                        )}
+                        {/* Consecutive Failures Warning - HIDDEN DURING TEST */}
+                        {/* Internal tracking only */}
                     </>
                 )}
             </div>
