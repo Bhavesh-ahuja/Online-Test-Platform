@@ -3,7 +3,7 @@
  * Single question mark per level - WORKING STATE
  */
 
-import { SHAPES, getShapesForGrid, getEmptyCountForLevel } from '../config/geoSudoConfig';
+import { SHAPES, getShapesForGrid, getEmptyCountForLevel, getTier } from '../config/geoSudoConfig.js';
 
 /**
  * Simple seeded random number generator for reproducibility
@@ -84,9 +84,61 @@ function fillGrid(grid, shapes, random) {
 }
 
 /**
- * Solver to check for unique solutions
- * We only care if there is exactly 1 valid shape for the target cell
+ * Get potential candidates for a cell based on Sudoku rules
  */
+export function getCandidates(grid, row, col, shapes) {
+    const candidates = [];
+    for (const shape of shapes) {
+        if (isValidPlacement(grid, row, col, shape)) {
+            candidates.push(shape)
+        }
+    }
+    return candidates;
+}
+
+/**
+ * HUMAN LOGIC ANALYZER
+ * Returns the "Deduction Depth" needed to solve the target cell.
+ */
+export function analyzeDeduction(grid, targetRow, targetCol, shapes) {
+    const rowCandidates = getCandidates(grid, targetRow, targetCol, shapes);
+
+    // Check Row Triviality (3 shapes known in row)
+    const rowKnowns = grid[targetRow].filter(c => c !== null).length;
+    if (rowKnowns === 3) return { depth: 1, method: 'Row Elimination' };
+
+    // Check Col Triviality (3 shapes known in col)
+    let colKnowns = 0;
+    for (let r = 0; r < 4; r++) {
+        if (grid[r][targetCol] !== null) colKnowns++;
+    }
+    if (colKnowns === 3) return { depth: 1, method: 'Col Elimination' };
+
+    // Check Intersection (Row + Col)
+    // If only one shape fits the intersection of Row and Col constraints
+    if (rowCandidates.length === 1) {
+        return { depth: 2, method: 'Row-Col Intersection' };
+    }
+
+    // Depth 3: Multiple cells in row/col are empty, requiring multi-step thought
+    return { depth: 3, method: 'Strategic Deduction' };
+}
+
+/**
+ * Count fully filled rows and columns
+ */
+export function countAnchors(grid) {
+    let anchors = 0;
+    const size = grid.length;
+    for (let r = 0; r < size; r++) {
+        if (grid[r].every(c => c !== null)) anchors++;
+    }
+    for (let c = 0; c < size; c++) {
+        if (grid.every(r => r[c] !== null)) anchors++;
+    }
+    return anchors;
+}
+
 function countSolutionsForTarget(grid, row, col, shapes) {
     let solutions = 0;
     for (const shape of shapes) {
@@ -136,76 +188,86 @@ function canFinishGrid(grid, shapes) {
 export function generatePuzzle(level, seed) {
     const gridSize = 4;
     const shapes = getShapesForGrid(gridSize);
+    const tier = getTier(level);
 
-    // Use a multi-layered seed for better entropy
-    const seedStr = typeof seed === 'string' ? seed : String(seed);
-    const numericSeed = seedStr.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-    const random = new SeededRandom(numericSeed);
+    let currentSeed = seed;
+    while (true) {
+        const seedStr = typeof currentSeed === 'string' ? currentSeed : String(currentSeed);
+        const numericSeed = seedStr.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+        const random = new SeededRandom(numericSeed);
 
-    // Guard against rare bad luck with regeneration limit
-    for (let attempt = 0; attempt < 10; attempt++) {
-        const completeGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
-        if (!fillGrid(completeGrid, shapes, random)) continue;
+        for (let attempt = 0; attempt < 100; attempt++) {
+            const completeGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
+            if (!fillGrid(completeGrid, shapes, random)) continue;
 
-        const questionRow = random.nextInt(gridSize);
-        const questionCol = random.nextInt(gridSize);
-        const correctAnswer = completeGrid[questionRow][questionCol];
+            const questionRow = random.nextInt(gridSize);
+            const questionCol = random.nextInt(gridSize);
+            const correctAnswer = completeGrid[questionRow][questionCol];
 
-        const totalToRemove = getEmptyCountForLevel(level, random);
-        const puzzleGrid = completeGrid.map(row => [...row]);
-        puzzleGrid[questionRow][questionCol] = null;
+            const puzzleGrid = completeGrid.map(row => [...row]);
+            puzzleGrid[questionRow][questionCol] = null;
 
-        // Difficulty Tuning: For Levels 1-5 (ENTRY), enforce a 2-step deduction.
-        // This is done by ensuring at least one other cell in the same row is removed,
-        // making the row ambiguous until you check the column.
-        if (level <= 5) {
-            let rowNeighbors = [];
-            for (let c = 0; c < gridSize; c++) {
-                if (c !== questionCol) rowNeighbors.push({ r: questionRow, c });
+            // 1. Mandatory Removals for Non-Triviality
+            if (level <= 5) {
+                const rowOthers = [0, 1, 2, 3].filter(c => c !== questionCol);
+                const colOthers = [0, 1, 2, 3].filter(r => r !== questionRow);
+                const rSh = shuffle(rowOthers, random);
+                const cSh = shuffle(colOthers, random);
+                puzzleGrid[questionRow][rSh[0]] = null;
+                puzzleGrid[questionRow][rSh[1]] = null;
+                puzzleGrid[cSh[0]][questionCol] = null;
             }
-            const neighbor = rowNeighbors[random.nextInt(rowNeighbors.length)];
-            puzzleGrid[neighbor.r][neighbor.c] = null;
-        }
 
-        // Collect all potential cells to remove
-        const otherCells = [];
-        for (let r = 0; r < gridSize; r++) {
-            for (let c = 0; c < gridSize; c++) {
-                if (puzzleGrid[r][c] !== null) {
-                    otherCells.push({ r, c });
+            // 2. Strategic Removal Loop
+            const totalToRemove = getEmptyCountForLevel(level, random);
+            const otherCells = [];
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (puzzleGrid[r][c] !== null) otherCells.push({ r, c });
                 }
             }
-        }
 
-        const shuffledOthers = shuffle(otherCells, random);
-        let removedCount = puzzleGrid.flat().filter(c => c === null).length;
+            const shuffledOthers = shuffle(otherCells, random);
+            let removedCount = puzzleGrid.flat().filter(c => c === null).length;
 
-        // Iteratively remove cells while maintaining a unique solution for the target
-        for (let i = 0; i < shuffledOthers.length && removedCount < totalToRemove; i++) {
-            const { r, c } = shuffledOthers[i];
-            const originalValue = puzzleGrid[r][c];
-            puzzleGrid[r][c] = null;
+            for (let i = 0; i < shuffledOthers.length && removedCount < totalToRemove; i++) {
+                const { r, c } = shuffledOthers[i];
+                const originalValue = puzzleGrid[r][c];
+                puzzleGrid[r][c] = null;
 
-            if (countSolutionsForTarget(puzzleGrid, questionRow, questionCol, shapes) === 1) {
-                removedCount++;
-            } else {
-                puzzleGrid[r][c] = originalValue;
+                let skip = false;
+                if (level <= 5) {
+                    for (let k = 0; k < 4; k++) {
+                        const rK = puzzleGrid[k].filter(v => v !== null).length;
+                        let cK = 0;
+                        for (let cr = 0; cr < 4; cr++) if (puzzleGrid[cr][k] !== null) cK++;
+                        if (rK === 3 || cK === 3) skip = true;
+                    }
+                }
+                if (level >= 6 && countAnchors(puzzleGrid) > (tier.maxAnchors ?? 8)) skip = true;
+
+                if (skip || countSolutionsForTarget(puzzleGrid, questionRow, questionCol, shapes) !== 1) {
+                    puzzleGrid[r][c] = originalValue;
+                } else {
+                    removedCount++;
+                }
+            }
+
+            // 3. Final Metric Validation
+            const deduction = analyzeDeduction(puzzleGrid, questionRow, questionCol, shapes);
+            const anchors = countAnchors(puzzleGrid);
+            if (deduction.depth >= tier.minDepth && anchors <= (tier.maxAnchors ?? 8)) {
+                return {
+                    grid: puzzleGrid,
+                    questionRow,
+                    questionCol,
+                    correctAnswer,
+                    gridSize,
+                    shapes,
+                    difficultyMetrics: { depth: deduction.depth, method: deduction.method, anchors }
+                };
             }
         }
-
-        // FINAL VALIDATION: Ensure the puzzle is solvable and the target actually has exactly 1 solution
-        if (countSolutionsForTarget(puzzleGrid, questionRow, questionCol, shapes) === 1) {
-            return {
-                grid: puzzleGrid,
-                questionRow,
-                questionCol,
-                correctAnswer,
-                gridSize,
-                shapes
-            };
-        }
+        currentSeed = currentSeed + "-retry";
     }
-
-    // Fallback in case of total collapse (extremely rare)
-    return generatePuzzle(level, seed + "-fallback");
 }
