@@ -66,7 +66,9 @@ function MyResultsPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                         {sub.test.type === 'SWITCH' ? (
-                                            <span className="font-bold text-blue-600">{sub.score} (Switch)</span>
+                                            <span className="font-bold text-blue-600">{sub.switchResult?.score || sub.score} (Switch)</span>
+                                        ) : sub.test.type === 'DIGIT' ? (
+                                            <span className="font-bold text-purple-600">{sub.digitResult?.score?.toFixed(2) || sub.score} (Digit)</span>
                                         ) : (
                                             <>
                                                 <span className="font-bold text-blue-600">{sub.score}</span> / {sub.test._count?.questions || '-'}
