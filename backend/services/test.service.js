@@ -191,7 +191,13 @@ class TestService {
                 message: 'Test started',
                 startTime: submission.createdAt,
                 submissionId: submission.id,
-                examSessionToken
+                examSessionToken,
+                test: {
+                    id: test.id,
+                    duration: test.duration,
+                    title: test.title,
+                    type: test.type
+                }
             };
         });
     }
@@ -348,7 +354,50 @@ class TestService {
                         submissionId: submission.id
                     }
                 });
-            } else {
+            }
+            // --- HANDLE DIGIT CHALLENGE ---
+            else if (submission.test.type === 'DIGIT' || testType === 'DIGIT') {
+                if (!metrics) throw new AppError('Missing performance metrics', 400);
+
+                score = finalScore || 0;
+                newStatus = metrics.reason === 'TIMEOUT' ? 'TIMEOUT' :
+                    (metrics.reason === 'VIOLATION_LIMIT' ? 'TERMINATED' :
+                        (metrics.reason === 'CONSECUTIVE_FAILURES' ? 'TERMINATED' : 'COMPLETED'));
+                const accuracy = metrics.correct / (metrics.totalAttempts || 1);
+
+                await tx.digitChallengeResult.create({
+                    data: {
+                        userId: submission.studentId,
+                        testId: parseInt(id),
+                        score: score,
+                        accuracy: accuracy,
+                        metrics: metrics,
+                        submissionId: submission.id
+                    }
+                });
+            }
+            // --- HANDLE GEOSUDO CHALLENGE ---
+            else if (submission.test.type === 'GEOSUDO' || testType === 'GEOSUDO') {
+                if (!metrics) throw new AppError('Missing performance metrics', 400);
+
+                score = finalScore || 0;
+                newStatus = metrics.reason === 'TIMEOUT' ? 'TIMEOUT' :
+                    (metrics.reason === 'VIOLATION_LIMIT' ? 'TERMINATED' :
+                        (metrics.reason === 'CONSECUTIVE_FAILURES' ? 'TERMINATED' : 'COMPLETED'));
+                const accuracy = metrics.correct / (metrics.totalAttempts || 1);
+
+                await tx.geoSudoChallengeResult.create({
+                    data: {
+                        userId: submission.studentId,
+                        testId: parseInt(id),
+                        score: score,
+                        accuracy: accuracy,
+                        metrics: metrics,
+                        submissionId: submission.id
+                    }
+                });
+            }
+            else {
                 // --- HANDLE STANDARD TEST ---
                 const correctQuestions = await tx.question.findMany({
                     where: { testId: parseInt(id) },
@@ -403,10 +452,34 @@ class TestService {
         const submission = await prisma.testSubmission.findUnique({
             where: { id: parseInt(submissionId) },
             include: {
-                test: { select: { title: true, showResult: true, _count: { select: { questions: true } } } },
+                test: { select: { title: true, showResult: true, type: true, _count: { select: { questions: true } } } },
                 answers: {
                     include: {
                         question: { select: { text: true, options: true, correctAnswer: true } }
+                    }
+                },
+                switchResult: {
+                    select: {
+                        score: true,
+                        accuracy: true,
+                        metrics: true,
+                        createdAt: true
+                    }
+                },
+                digitResult: {
+                    select: {
+                        score: true,
+                        accuracy: true,
+                        metrics: true,
+                        createdAt: true
+                    }
+                },
+                geoSudoChallengeResult: {
+                    select: {
+                        score: true,
+                        accuracy: true,
+                        metrics: true,
+                        createdAt: true
                     }
                 }
             }
@@ -438,6 +511,20 @@ class TestService {
                     }
                 },
                 switchResult: {
+                    select: {
+                        score: true,
+                        metrics: true,
+                        createdAt: true // Include completion time
+                    }
+                },
+                digitResult: {
+                    select: {
+                        score: true,
+                        metrics: true,
+                        createdAt: true // Include completion time
+                    }
+                },
+                geoSudoChallengeResult: {
                     select: {
                         score: true,
                         metrics: true,

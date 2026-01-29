@@ -4,7 +4,6 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,24 +24,25 @@ enum AttemptType {
   UNLIMITED
 }
 
-
 // Defines the User table
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
 
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   firstName String @default("")
   lastName  String @default("")
 
   // Relation: One user can create many tests
-  tests     Test[]
-  submissions TestSubmission[] // A user can have many submissions
-  switchResults SwitchChallengeResult[]
+  tests                   Test[]
+  submissions             TestSubmission[] // A user can have many submissions
+  switchResults           SwitchChallengeResult[]
+  digitResults            DigitChallengeResult[]
+  geoSudoChallengeResults GeoSudoChallengeResult[]
 }
 
 // Defines the Test table
@@ -55,67 +55,69 @@ model Test {
   scheduledEnd   DateTime?
   createdAt      DateTime  @default(now())
 
-  showResult     Boolean   @default(true)
+  showResult Boolean @default(true)
 
   attemptType AttemptType @default(ONCE)
   maxAttempts Int?
-  
-  type        TestType    @default(STANDARD)
-  
+
+  type TestType @default(STANDARD)
+
   switchConfig SwitchChallengeConfig?
 
   createdById Int
-  createdBy   User       @relation(fields: [createdById], references: [id])
-  
-  // Relation: One test has many questions & can have many submissions
-  questions   Question[]
-  submissions TestSubmission[]
-  switchResults SwitchChallengeResult[] 
+  createdBy   User @relation(fields: [createdById], references: [id])
 
+  // Relation: One test has many questions & can have many submissions
+  questions               Question[]
+  submissions             TestSubmission[]
+  switchResults           SwitchChallengeResult[]
+  digitResults            DigitChallengeResult[]
+  geoSudoChallengeResults GeoSudoChallengeResult[]
 }
 
 // Defines the Question table
 model Question {
-  id            Int      @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   text          String
-  type          String   // "MCQ" or "SHORT"
+  type          String // "MCQ" or "SHORT"
   options       Json // Array of options for MCQ (MySQL doesn't support String[])
-  correctAnswer String?  // Optional for short answers
-  
+  correctAnswer String? // Optional for short answers
+
   // Relation: Question belongs to a Test
-  testId        Int
-  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  answers       Answer[]  // A question can have many answers
+  testId  Int
+  test    Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers Answer[] // A question can have many answers
 }
 
 model TestSubmission {
   id        Int      @id @default(autoincrement())
   status    String   @default("COMPLETED") // 'COMPLETED', 'TIMEOUT', 'TERMINATED'
   createdAt DateTime @default(now())
-   
-  score        Int      @default(0)
-  answersDraft  Json?  
+
+  score        Int   @default(0)
+  answersDraft Json?
 
   testId Int
   test   Test @relation(fields: [testId], references: [id])
 
   studentId Int
-  student   User     @relation(fields: [studentId], references: [id])
-  
-  answers   Answer[] // A submission is made up of many answers
-  switchResult SwitchChallengeResult?
+  student   User @relation(fields: [studentId], references: [id])
 
+  answers                Answer[] // A submission is made up of many answers
+  switchResult           SwitchChallengeResult?
+  digitResult            DigitChallengeResult?
+  canViewResult          Boolean                 @default(false)
+  geoSudoChallengeResult GeoSudoChallengeResult?
 
   @@index([testId])
   @@index([studentId])
-  canViewResult Boolean @default(false)
 }
 
 model Answer {
-  id           Int    @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   selectedAnswer String
-  isCorrect    Boolean
-  
+  isCorrect      Boolean
+
   // Relations
   submissionId Int
   submission   TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
@@ -131,6 +133,7 @@ enum TestType {
   STANDARD
   SWITCH
   DIGIT
+  GEOSUDO
 }
 
 model SwitchChallengeConfig {
@@ -154,10 +157,50 @@ model SwitchChallengeResult {
   // Optional: Relation to User and Test if needed for integrity constraints
   // For high performance, we might keep these as raw IDs or add relations if consistency is preferred over raw insert speed.
   // Given the requirement "Do one DB insert, No loops", adding relations here is fine as long as we insert using connect.
-  
-  user   User @relation(fields: [userId], references: [id])
-  test   Test @relation(fields: [testId], references: [id])
-  
-  submissionId Int @unique
-  submission TestSubmission @relation(fields: [submissionId], references: [id])
+
+  user User @relation(fields: [userId], references: [id])
+  test Test @relation(fields: [testId], references: [id])
+
+  submissionId Int            @unique
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
+}
+
+// =========================
+// DIGIT CHALLENGE MODELS
+// =========================
+
+model DigitChallengeResult {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  testId    Int
+  score     Float
+  accuracy  Float
+  metrics   Json     @db.Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  test Test @relation(fields: [testId], references: [id])
+
+  submissionId Int            @unique
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
+}
+
+// =========================
+// GEOSUDO CHALLENGE MODELS
+// =========================
+
+model GeoSudoChallengeResult {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  testId    Int
+  score     Float
+  accuracy  Float
+  metrics   Json     @db.Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  test Test @relation(fields: [testId], references: [id])
+
+  submissionId Int            @unique
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
 }

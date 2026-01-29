@@ -1,0 +1,20 @@
+
+// =========================
+// DIGIT CHALLENGE MODELS
+// =========================
+
+model DigitChallengeResult {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  testId    Int
+  score     Float    // Store decimal scores (e.g., 156.75)
+  accuracy  Float    // Percentage of correct answers
+  metrics   Json     @db.Json // { totalAttempts, correct, incorrect, avgReactionMs, maxLevel, violations, consecutiveFailures }
+  createdAt DateTime @default(now())
+
+  user   User @relation(fields: [userId], references: [id])
+  test   Test @relation(fields: [testId], references: [id])
+  
+  submissionId Int @unique
+  submission TestSubmission @relation(fields: [submissionId], references: [id])
+}
