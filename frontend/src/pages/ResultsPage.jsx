@@ -80,6 +80,12 @@ function ResultsPage() {
             <p className="text-gray-600 mt-2">Digit Challenge Score</p>
             <p className="text-sm text-gray-500">Accuracy: {((result.digitResult?.accuracy || 0) * 100).toFixed(0)}%</p>
           </>
+        ) : result.test.type === 'GEOSUDO' ? (
+          <>
+            <p className="text-5xl font-extrabold text-orange-600">{(result.geoSudoChallengeResult?.score || result.score).toFixed(2)}</p>
+            <p className="text-gray-600 mt-2">GeoSudo Challenge Score</p>
+            <p className="text-sm text-gray-500">Accuracy: {((result.geoSudoChallengeResult?.accuracy || 0) * 100).toFixed(0)}%</p>
+          </>
         ) : (
           <>
             <p className="text-5xl font-extrabold text-blue-600">
@@ -93,25 +99,25 @@ function ResultsPage() {
       </div>
 
       {/* Challenge Metrics */}
-      {(result.test.type === 'SWITCH' || result.test.type === 'DIGIT') && (
+      {(result.test.type === 'SWITCH' || result.test.type === 'DIGIT' || result.test.type === 'GEOSUDO') && (
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
           <h2 className="text-xl font-semibold mb-4">Performance Metrics</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 bg-gray-50 rounded">
               <strong className="text-gray-600">Max Level:</strong>
-              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.maxLevel || result.digitResult?.metrics?.maxLevel || 'N/A'}</span>
+              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.maxLevel || result.digitResult?.metrics?.maxLevel || result.geoSudoChallengeResult?.metrics?.maxLevel || 'N/A'}</span>
             </div>
             <div className="p-3 bg-gray-50 rounded">
               <strong className="text-gray-600">Total Attempts:</strong>
-              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.totalAttempts || result.digitResult?.metrics?.totalAttempts || 'N/A'}</span>
+              <span className="ml-2 text-lg font-bold">{result.switchResult?.metrics?.totalAttempts || result.digitResult?.metrics?.totalAttempts || result.geoSudoChallengeResult?.metrics?.totalAttempts || 'N/A'}</span>
             </div>
             <div className="p-3 bg-gray-50 rounded">
               <strong className="text-gray-600">Correct:</strong>
-              <span className="ml-2 text-lg font-bold text-green-600">{result.switchResult?.metrics?.correct || result.digitResult?.metrics?.correct || 'N/A'}</span>
+              <span className="ml-2 text-lg font-bold text-green-600">{result.switchResult?.metrics?.correct || result.digitResult?.metrics?.correct || result.geoSudoChallengeResult?.metrics?.correct || 'N/A'}</span>
             </div>
             <div className="p-3 bg-gray-50 rounded">
               <strong className="text-gray-600">Violations:</strong>
-              <span className="ml-2 text-lg font-bold text-red-600">{result.switchResult?.metrics?.violations || result.digitResult?.metrics?.violations || 0}</span>
+              <span className="ml-2 text-lg font-bold text-red-600">{result.switchResult?.metrics?.violations || result.digitResult?.metrics?.violations || result.geoSudoChallengeResult?.metrics?.violations || 0}</span>
             </div>
           </div>
         </div>

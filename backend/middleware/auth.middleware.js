@@ -6,7 +6,7 @@ export const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ error: 'Access denied. No token provided.'});
+        return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
 
     try {
@@ -14,13 +14,15 @@ export const authenticateToken = (req, res, next) => {
         req.user = verified; // Attch user info (id, role to the request)
         next(); // Continue to the next function
     } catch (error) {
-        res.status(403).json({ error: 'Invalid token' });
+        // JWT errors should return 401 Unauthorized, not 403 Forbidden
+        // 403 is for permission denied (valid auth but insufficient permissions)
+        return res.status(401).json({ error: 'Invalid or expired token' });
     }
 };
 
 export const isAdmin = (req, res, next) => {
     if (req.user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Access denied. Admins onplay.'});
+        return res.status(403).json({ error: 'Access denied. Admins onplay.' });
     }
     next();
 };
