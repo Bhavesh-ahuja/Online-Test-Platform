@@ -145,7 +145,7 @@ const MotionGrid = ({ items, onMoveTo, getConstraints, exitPos = { x: 3, y: 5 } 
                 zIndex: 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-                <div style={{ width: '60%', height: '60%', border: '4px dashed rgba(255, 255, 255, 0.2)', borderRadius: '50%' }}></div>
+                <div style={{ width: '90%', height: '90%', border: '4px dashed rgba(255, 255, 255, 0.4)', borderRadius: '50%' }}></div>
             </div>
 
             {/* Items */}

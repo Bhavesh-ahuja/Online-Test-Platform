@@ -32,7 +32,7 @@ const MotionBlock = ({ item, isDragging, onDragStart, style = {} }) => {
         width: `${widthPct}%`,
         height: `${heightPct}%`,
         boxSizing: 'border-box',
-        padding: '4px', // Gap
+        padding: '12px', // Gap
         transition: isDragging ? 'none' : 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)',
         zIndex: isDragging ? 20 : (item.type === 1 ? 10 : 5),
         cursor: item.type === 3 ? 'default' : (isDragging ? 'grabbing' : 'grab'),

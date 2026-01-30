@@ -30,6 +30,13 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
         () => onFinish({ score: 0, metrics: { reason: "TERMINATED", totalAttempts: 0, puzzlesSolved: 0 } })
     );
 
+    const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false);
+
+    const handleConfirmSkip = () => {
+        skipPuzzle();
+        setIsSkipConfirmOpen(false);
+    };
+
     return (
         <div className="min-h-screen bg-gray-900 text-white flex flex-col select-none">
             {/* Header */}
@@ -73,7 +80,7 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
                     {/* Controls */}
                     <div className="flex space-x-4 mt-8">
                         <button
-                            onClick={skipPuzzle}
+                            onClick={() => setIsSkipConfirmOpen(true)}
                             className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg border border-gray-500 transition-colors"
                         >
                             Skip Puzzle
@@ -85,6 +92,31 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
                     </p>
                 </div>
             </div>
+
+            {/* Skip Confirmation Modal */}
+            <Modal
+                isOpen={isSkipConfirmOpen}
+                onClose={() => setIsSkipConfirmOpen(false)}
+                title="Skip Puzzle?"
+                actions={
+                    <>
+                        <button
+                            onClick={() => setIsSkipConfirmOpen(false)}
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleConfirmSkip}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                        >
+                            Skip
+                        </button>
+                    </>
+                }
+            >
+                <p>Are you sure you want to skip this puzzle? You won't get points for it.</p>
+            </Modal>
         </div>
     );
 };
