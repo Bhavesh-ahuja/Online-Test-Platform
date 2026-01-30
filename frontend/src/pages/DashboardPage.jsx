@@ -120,6 +120,8 @@ function DashboardPage() {
                           navigate(`/digit-challenge/${test.id}`);
                         } else if (test.type === 'GEOSUDO') {
                           navigate(`/geosudo-challenge/${test.id}`);
+                        } else if (test.type === 'MOTION') {
+                          navigate(`/motion-challenge/${test.id}`);
                         } else {
                           navigate(`/test/${test.id}`);
                         }
@@ -166,6 +168,8 @@ function DashboardPage() {
                               navigate(`/digit-challenge/${test.id}`);
                             } else if (test.type === 'GEOSUDO') {
                               navigate(`/geosudo-challenge/${test.id}`);
+                            } else if (test.type === 'MOTION') {
+                              navigate(`/motion-challenge/${test.id}`);
                             } else {
                               navigate(`/test/${test.id}/instructions`);
                             }
@@ -199,13 +203,15 @@ function DashboardPage() {
                         navigate(`/digit-challenge/${test.id}`);
                       } else if (test.type === 'GEOSUDO') {
                         navigate(`/geosudo-challenge/${test.id}`);
+                      } else if (test.type === 'MOTION') {
+                        navigate(`/motion-challenge/${test.id}`);
                       } else {
                         navigate(`/test/${test.id}/instructions`);
                       }
                     }}
                     className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Start Test {test.type === 'SWITCH' && '🔄'} {test.type === 'DIGIT' && '🧮'} {test.type === 'GEOSUDO' && '🔶'}
+                    Start Test {test.type === 'SWITCH' && '🔄'} {test.type === 'DIGIT' && '🧮'} {test.type === 'GEOSUDO' && '🔶'} {test.type === 'MOTION' && '⚽'}
                   </button>
                 );
               })()}

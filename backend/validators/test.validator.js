@@ -9,7 +9,7 @@ export const createTestSchema = z.object({
     showResult: z.boolean().optional().default(true),
 
     // New Fields
-    type: z.enum(['STANDARD', 'SWITCH', 'DIGIT', 'GEOSUDO']).optional().default('STANDARD'),
+    type: z.enum(['STANDARD', 'SWITCH', 'DIGIT', 'GEOSUDO', 'MOTION']).optional().default('STANDARD'),
     switchConfig: z.object({
         durationSeconds: z.number().optional(),
         maxLevel: z.number().optional()

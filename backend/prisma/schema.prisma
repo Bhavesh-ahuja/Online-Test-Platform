@@ -43,6 +43,7 @@ model User {
   switchResults           SwitchChallengeResult[]
   digitResults            DigitChallengeResult[]
   geoSudoChallengeResults GeoSudoChallengeResult[]
+  motionResults           MotionChallengeResult[]
 }
 
 // Defines the Test table
@@ -62,7 +63,8 @@ model Test {
 
   type TestType @default(STANDARD)
 
-  switchConfig SwitchChallengeConfig?
+  switchConfig  SwitchChallengeConfig?
+  motionConfig  MotionChallengeConfig?
 
   createdById Int
   createdBy   User @relation(fields: [createdById], references: [id])
@@ -73,6 +75,7 @@ model Test {
   switchResults           SwitchChallengeResult[]
   digitResults            DigitChallengeResult[]
   geoSudoChallengeResults GeoSudoChallengeResult[]
+  motionResults           MotionChallengeResult[]
 }
 
 // Defines the Question table
@@ -108,6 +111,7 @@ model TestSubmission {
   digitResult            DigitChallengeResult?
   canViewResult          Boolean                 @default(false)
   geoSudoChallengeResult GeoSudoChallengeResult?
+  motionResult           MotionChallengeResult?
 
   @@index([testId])
   @@index([studentId])
@@ -134,6 +138,7 @@ enum TestType {
   SWITCH
   DIGIT
   GEOSUDO
+  MOTION
 }
 
 model SwitchChallengeConfig {
@@ -195,6 +200,34 @@ model GeoSudoChallengeResult {
   testId    Int
   score     Float
   accuracy  Float
+  metrics   Json     @db.Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  test Test @relation(fields: [testId], references: [id])
+
+  submissionId Int            @unique
+  submission   TestSubmission @relation(fields: [submissionId], references: [id])
+}
+
+// =========================
+// MOTION CHALLENGE MODELS
+// =========================
+
+model MotionChallengeConfig {
+  id              Int @id @default(autoincrement())
+  testId          Int @unique
+  durationSeconds Int @default(360)
+  
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+}
+
+model MotionChallengeResult {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  testId    Int
+  score     Float
+  accuracy  Float    // Can represent efficiency or puzzles solved / total attempts
   metrics   Json     @db.Json
   createdAt DateTime @default(now())
 

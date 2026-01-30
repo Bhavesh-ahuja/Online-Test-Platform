@@ -174,6 +174,11 @@ function CreateTestPage() {
         switchConfig: testData.type === 'SWITCH' ? {
           ...testData.switchConfig,
           durationSeconds: parseInt(testData.duration, 10) * 60
+        } : undefined,
+
+        // Sync Motion Config Duration
+        motionConfig: testData.type === 'MOTION' ? {
+          durationSeconds: parseInt(testData.duration, 10) * 60
         } : undefined
       };
 
@@ -251,6 +256,7 @@ function CreateTestPage() {
                 <option value="SWITCH">🔄 AON Switch Challenge (Cognitive Game)</option>
                 <option value="DIGIT">🧮 AON Digit Challenge (Mathematical Puzzle)</option>
                 <option value="GEOSUDO">🔶 GeoSudo Challenge (Geometric Sudoku)</option>
+                <option value="MOTION">⚽ AON Motion Challenge (Sliding Puzzle)</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
@@ -262,17 +268,19 @@ function CreateTestPage() {
           <div className={`p-4 rounded-lg border flex gap-4 items-start transition-all duration-300 ${testData.type === 'STANDARD' ? 'bg-blue-50 border-blue-200 text-blue-900' :
             testData.type === 'SWITCH' ? 'bg-purple-50 border-purple-200 text-purple-900' :
               testData.type === 'DIGIT' ? 'bg-green-50 border-green-200 text-green-900' :
-                'bg-orange-50 border-orange-200 text-orange-900'
+                testData.type === 'GEOSUDO' ? 'bg-orange-50 border-orange-200 text-orange-900' :
+                  'bg-red-50 border-red-200 text-red-900'
             }`}>
             <div className="text-3xl shrink-0">
-              {testData.type === 'STANDARD' ? '📝' : testData.type === 'SWITCH' ? '🔄' : testData.type === 'DIGIT' ? '🧮' : '🔶'}
+              {testData.type === 'STANDARD' ? '📝' : testData.type === 'SWITCH' ? '🔄' : testData.type === 'DIGIT' ? '🧮' : testData.type === 'GEOSUDO' ? '🔶' : '⚽'}
             </div>
             <div>
               <h3 className="font-bold text-lg mb-1">
                 {testData.type === 'STANDARD' ? 'Standard Assessment' :
                   testData.type === 'SWITCH' ? 'AON Switch Challenge' :
                     testData.type === 'DIGIT' ? 'AON Digit Challenge' :
-                      'GeoSudo Challenge'}
+                      testData.type === 'GEOSUDO' ? 'GeoSudo Challenge' :
+                        'Motion Challenge'}
               </h3>
               <p className="text-sm opacity-90 leading-relaxed">
                 {testData.type === 'STANDARD'
@@ -280,8 +288,10 @@ function CreateTestPage() {
                   : testData.type === 'SWITCH'
                     ? 'An adaptive cognitive game based on the AON Switch Challenge. Tests logical reasoning and reaction speed using automatically generated shape-matching puzzles.'
                     : testData.type === 'DIGIT'
-                      ? 'An advanced mathematical puzzle challenge with 20 progressive levels. Tests numerical reasoning and expression-building skills using dynamically generated digit puzzles. Each test session creates unique puzzles with increasing difficulty.'
-                      : 'A geometric sudoku puzzle game with 20 progressive levels. Tests spatial reasoning and deductive logic using dynamically generated shape-based sudoku grids. Each puzzle has a unique solution following classic sudoku rules.'}
+                      ? 'An advanced mathematical puzzle challenge with 20 progressive levels. Tests numerical reasoning and expression-building skills using dynamically generated digit puzzles.'
+                      : testData.type === 'GEOSUDO'
+                        ? 'A geometric sudoku puzzle game with 20 progressive levels. Tests spatial reasoning and deductive logic using dynamically generated shape-based sudoku grids.'
+                        : 'A sliding block puzzle game based on the AON Motion Challenge. Tests planning and problem-solving skills by moving a ball to an exit hole through a crowded grid.'}
               </p>
             </div>
           </div>
@@ -310,7 +320,7 @@ function CreateTestPage() {
         )}
 
         {/* DETAILS SECTION */}
-        {(testData.type === 'SWITCH' || testData.type === 'DIGIT' || testData.type === 'GEOSUDO' || activeTab === 'details') && (
+        {(testData.type === 'SWITCH' || testData.type === 'DIGIT' || testData.type === 'GEOSUDO' || testData.type === 'MOTION' || activeTab === 'details') && (
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 space-y-4 animate-fadeIn">
             <input className="w-full p-2 border rounded" placeholder="Test Title" name="title" required value={testData.title} onChange={handleTestChange} />
             <textarea className="w-full p-2 border rounded" placeholder="Description" name="description" value={testData.description} onChange={handleTestChange} />
@@ -320,7 +330,7 @@ function CreateTestPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
                 <input
                   type="number"
-                  min={testData.type === 'SWITCH' || testData.type === 'DIGIT' || testData.type === 'GEOSUDO' ? "6" : "1"}
+                  min={testData.type === 'SWITCH' || testData.type === 'DIGIT' || testData.type === 'GEOSUDO' || testData.type === 'MOTION' ? "1" : "1"}
                   className="w-full p-2 border rounded"
                   name="duration"
                   value={testData.duration}
@@ -374,6 +384,12 @@ function CreateTestPage() {
               <div className="bg-purple-50 p-4 rounded text-sm text-purple-800">
                 <h4 className="font-bold mb-1">Switch Challenge Configuration</h4>
                 <p>This test will use the adaptive engine. Duration is set to 6 minutes by default but depends on the main timer.</p>
+              </div>
+            )}
+            {testData.type === 'MOTION' && (
+              <div className="bg-red-50 p-4 rounded text-sm text-red-800">
+                <h4 className="font-bold mb-1">Motion Challenge Configuration</h4>
+                <p>Participants solve as many puzzles as possible within the specific duration.</p>
               </div>
             )}
 

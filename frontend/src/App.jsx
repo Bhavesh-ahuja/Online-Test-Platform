@@ -20,6 +20,7 @@ import ProfilePage from './pages/ProfilePage';
 import SwitchChallengePage from './pages/SwitchChallengePage';
 import DigitChallengePage from './pages/DigitChallengePage';
 import GeoSudoChallengePage from './pages/GeoSudoChallengePage';
+import MotionChallengePage from './pages/MotionChallengePage';
 import TestSubmitted from "./pages/TestSubmitted";
 
 
@@ -66,6 +67,12 @@ function AppRoutes() {
       <Route
         path="/geosudo-challenge/:id"
         element={<GeoSudoChallengePage />}
+      />
+
+      {/* Motion Challenge Route */}
+      <Route
+        path="/motion-challenge/:id"
+        element={<MotionChallengePage />}
       />
     </Routes>
   );

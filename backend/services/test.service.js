@@ -14,7 +14,8 @@ class TestService {
             attemptType,
             maxAttempts,
             type, // 'STANDARD' or 'SWITCH'
-            switchConfig // { durationSeconds, maxLevel }
+            switchConfig, // { durationSeconds, maxLevel }
+            motionConfig // { durationSeconds }
         } = data;
 
         if (scheduledStart && scheduledEnd && new Date(scheduledStart) >= new Date(scheduledEnd)) {
@@ -30,6 +31,10 @@ class TestService {
         // If Switch Challenge, use the config duration
         if (type === 'SWITCH' && switchConfig?.durationSeconds) {
             finalDuration = Math.ceil(switchConfig.durationSeconds / 60);
+        }
+        // If Motion Challenge, use the config duration
+        if (type === 'MOTION' && motionConfig?.durationSeconds) {
+            finalDuration = Math.ceil(motionConfig.durationSeconds / 60);
         }
 
         const newTest = await prisma.test.create({
@@ -60,11 +65,18 @@ class TestService {
                         durationSeconds: switchConfig.durationSeconds || 360,
                         maxLevel: switchConfig.maxLevel || 5
                     }
+                } : undefined,
+
+                motionConfig: type === 'MOTION' ? {
+                    create: {
+                        durationSeconds: motionConfig?.durationSeconds || 360
+                    }
                 } : undefined
             },
             include: {
                 questions: true,
-                switchConfig: true
+                switchConfig: true,
+                motionConfig: true
             },
         });
 
@@ -307,6 +319,7 @@ class TestService {
                     },
                 },
                 switchConfig: true, // Include logic config
+                motionConfig: true
             },
         });
 
@@ -397,6 +410,25 @@ class TestService {
                     }
                 });
             }
+            // --- HANDLE MOTION CHALLENGE ---
+            else if (submission.test.type === 'MOTION' || testType === 'MOTION') {
+                if (!metrics) throw new AppError('Missing performance metrics', 400);
+                
+                score = finalScore || 0;
+                newStatus = metrics.reason === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED';
+                const accuracy = metrics.puzzlesSolved / (metrics.totalAttempts || 1); // Or logical equivalent
+
+                await tx.motionChallengeResult.create({
+                    data: {
+                        userId: submission.studentId,
+                        testId: parseInt(id),
+                        score: score,
+                        accuracy: accuracy || 0,
+                        metrics: metrics,
+                        submissionId: submission.id
+                    }
+                });
+            }
             else {
                 // --- HANDLE STANDARD TEST ---
                 const correctQuestions = await tx.question.findMany({
@@ -481,6 +513,14 @@ class TestService {
                         metrics: true,
                         createdAt: true
                     }
+                },
+                motionResult: {
+                    select: {
+                        score: true,
+                        accuracy: true,
+                        metrics: true,
+                        createdAt: true
+                    }
                 }
             }
         });
@@ -529,6 +569,13 @@ class TestService {
                         score: true,
                         metrics: true,
                         createdAt: true // Include completion time
+                    }
+                },
+                motionResult: {
+                    select: {
+                        score: true,
+                        metrics: true,
+                        createdAt: true
                     }
                 }
             },
