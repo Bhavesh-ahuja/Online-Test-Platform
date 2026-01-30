@@ -22,7 +22,8 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
         level,
         moveItemTo,
         calculateConstraints,
-        skipPuzzle
+        skipPuzzle,
+        currentScore
     } = useMotionGame(
         testConfig?.motionConfig || { durationSeconds: testConfig?.duration * 60 },
         // onComplete
@@ -66,6 +67,7 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
                     {/* Stats Bar */}
                     <div className="w-full flex justify-between text-sm text-gray-400 px-4">
                         <div className="flex space-x-6">
+                            <span>Score: <strong className="text-green-400">{currentScore}</strong></span>
                             <span>Solved: <strong className="text-white">{puzzlesSolved}</strong></span>
                             <span>Moves (Current): <strong className="text-white">{moves}</strong></span>
                         </div>

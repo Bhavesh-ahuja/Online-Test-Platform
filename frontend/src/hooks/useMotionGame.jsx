@@ -7,20 +7,22 @@ export const useMotionGame = (config, onComplete, onTermination) => {
     const [exitPos, setExitPos] = useState({ x: 3, y: 5 });
     const [gridSize, setGridSize] = useState({ w: 4, h: 6 }); // Default
 
+    // State for score tracking
     const [score, setScore] = useState(0);
     const [puzzlesSolved, setPuzzlesSolved] = useState(0);
-    const [moves, setMoves] = useState(0);
-    const [totalMoves, setTotalMoves] = useState(0);
+    const [levelMoves, setLevelMoves] = useState(0); // Moves for current level
+    const [totalMoves, setTotalMoves] = useState(0); // Total moves in session
     const [timeLeft, setTimeLeft] = useState(config?.durationSeconds || 360);
     const [isAnimating, setIsAnimating] = useState(false);
 
-    // Metrics
+    // Refs for calculation (avoiding stale closures in timeouts)
+    const currentMinMovesRef = useRef(10);
     const metricsRef = useRef({
         totalAttempts: 0,
-        puzzlesPlaying: 0,
+        puzzlesSolved: 0,
         moveHistory: [],
         puzzleStartTimes: [],
-        puzzlesSolved: 0
+        finalScore: 0
     });
 
     const timerRef = useRef(null);
@@ -34,7 +36,9 @@ export const useMotionGame = (config, onComplete, onTermination) => {
             setTimeLeft(prev => {
                 if (prev <= 1) {
                     clearInterval(timerRef.current);
-                    handleTimeout();
+                    // Use a timeout to break the render cycle and ensure latest state is captured if needed
+                    // But here we rely on refs for critical data or pass current state wrapper
+                    setTimeout(() => handleTimeout(), 0);
                     return 0;
                 }
                 return prev - 1;
@@ -45,17 +49,27 @@ export const useMotionGame = (config, onComplete, onTermination) => {
     }, []);
 
     const loadNewPuzzle = (lvl) => {
-        const { items: newItems, exitPos: newExit, gridSize: newGrid } = generatePuzzle(lvl);
+        const { items: newItems, exitPos: newExit, gridSize: newGrid, minMoves } = generatePuzzle(lvl);
         setItems(newItems);
         if (newExit) setExitPos(newExit);
         if (newGrid) setGridSize(newGrid);
-        setMoves(0);
+
+        currentMinMovesRef.current = minMoves || (lvl * 2 + 5);
+        setLevelMoves(0);
+    };
+
+    // Use a ref for score to ensure timeout captures the latest value without dependency issues
+    const scoreRef = useRef(0);
+    const updateScore = (newPoints) => {
+        const s = scoreRef.current + newPoints;
+        scoreRef.current = s;
+        setScore(s);
     };
 
     const handleTimeout = () => {
         if (onComplete) {
             onComplete({
-                score: calculateScore(),
+                score: scoreRef.current, // Use ref for latest
                 metrics: {
                     reason: 'TIMEOUT',
                     totalAttempts: metricsRef.current.totalAttempts,
@@ -63,10 +77,6 @@ export const useMotionGame = (config, onComplete, onTermination) => {
                 }
             });
         }
-    };
-
-    const calculateScore = () => {
-        return metricsRef.current.puzzlesSolved * 100 + (totalMoves * 1);
     };
 
     const calculateConstraints = useCallback((itemId) => {
@@ -123,6 +133,9 @@ export const useMotionGame = (config, onComplete, onTermination) => {
 
             // Check Win
             if (newItem.type === ItemTypes.TARGET && newX === exitPos.x && newY === exitPos.y) {
+                // Pass current level moves + 1 (this move) to solver handler
+                // Need to use functional update or ref for accurate move count?
+                // We'll trigger it via effect or timeout to read latest state.
                 setTimeout(() => handlePuzzleSolved(), 300);
             }
 
@@ -133,11 +146,27 @@ export const useMotionGame = (config, onComplete, onTermination) => {
             return newArr;
         });
 
-        setMoves(m => m + 1);
+        setLevelMoves(m => m + 1);
         setTotalMoves(tm => tm + 1);
     }, [isAnimating, timeLeft, exitPos]);
 
     const handlePuzzleSolved = () => {
+        // Calculate Score based on Efficiency
+        // Moves used for this puzzle: levelMoves + 1 (the winning move)
+        // Safety: ensure no divide by zero
+        const actualMoves = Math.max(1, levelMoves + 1);
+        const optimalMoves = currentMinMovesRef.current;
+
+        // Efficiency Ratio
+        // if Actual <= Optimal -> 1.0 -> 100 pts
+        // if Actual = 2 * Optimal -> 0.5 -> 50 pts
+        let ratio = optimalMoves / actualMoves;
+        if (ratio > 1) ratio = 1; // Cap at 100%
+
+        const points = Math.max(10, Math.round(100 * ratio));
+
+        updateScore(points);
+
         setPuzzlesSolved(p => p + 1);
         metricsRef.current.puzzlesSolved++;
         const newLvl = level + 1;
@@ -146,6 +175,7 @@ export const useMotionGame = (config, onComplete, onTermination) => {
     };
 
     const skipPuzzle = () => {
+        // No points for skip
         loadNewPuzzle(level);
     };
 
@@ -154,11 +184,15 @@ export const useMotionGame = (config, onComplete, onTermination) => {
         exitPos,
         gridSize,
         timeLeft,
-        moves,
+        moves: totalMoves,
+        levelMoves,
         puzzlesSolved,
         level,
         moveItemTo,
         calculateConstraints,
-        skipPuzzle
-    };
+        skipPuzzle,
+        currentScore: scoreRef.current
+    }; // Use ref for stable return or state
 };
+
+

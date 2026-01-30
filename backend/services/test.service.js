@@ -106,9 +106,20 @@ class TestService {
             attemptType: data.attemptType,
             maxAttempts: data.attemptType === 'LIMITED' ? data.maxAttempts : null,
 
+            // Update Configs
+            switchConfig: (existingTest.type === 'SWITCH' && data.switchConfig) ? {
+                update: {
+                    durationSeconds: data.switchConfig.durationSeconds,
+                    maxLevel: data.switchConfig.maxLevel
+                }
+            } : undefined,
+
+            motionConfig: (existingTest.type === 'MOTION' && data.motionConfig) ? {
+                update: {
+                    durationSeconds: data.motionConfig.durationSeconds
+                }
+            } : undefined
         };
-
-
 
         // 4. Handle Questions Logic
         if (data.scheduledStart && data.scheduledEnd && new Date(data.scheduledStart) >= new Date(data.scheduledEnd)) {
@@ -413,7 +424,7 @@ class TestService {
             // --- HANDLE MOTION CHALLENGE ---
             else if (submission.test.type === 'MOTION' || testType === 'MOTION') {
                 if (!metrics) throw new AppError('Missing performance metrics', 400);
-                
+
                 score = finalScore || 0;
                 newStatus = metrics.reason === 'TIMEOUT' ? 'TIMEOUT' : 'COMPLETED';
                 const accuracy = metrics.puzzlesSolved / (metrics.totalAttempts || 1); // Or logical equivalent

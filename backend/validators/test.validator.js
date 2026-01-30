@@ -15,6 +15,10 @@ export const createTestSchema = z.object({
         maxLevel: z.number().optional()
     }).optional(),
 
+    motionConfig: z.object({
+        durationSeconds: z.number().optional()
+    }).optional(),
+
     attemptType: z.enum(['ONCE', 'LIMITED', 'UNLIMITED']).optional(),
     maxAttempts: z.coerce.number().int().positive().nullable().optional(),
 
