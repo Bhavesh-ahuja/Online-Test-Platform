@@ -19,7 +19,8 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
         moves,
         puzzlesSolved,
         level,
-        moveItem,
+        moveItemTo,
+        calculateConstraints,
         skipPuzzle
     } = useMotionGame(
         testConfig?.motionConfig || { durationSeconds: testConfig?.duration * 60 },
@@ -62,7 +63,12 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
                     </div>
 
                     {/* The Grid */}
-                    <MotionGrid items={items} onMove={moveItem} exitPos={exitPos} />
+                    <MotionGrid
+                        items={items}
+                        onMoveTo={moveItemTo}
+                        getConstraints={calculateConstraints}
+                        exitPos={exitPos}
+                    />
 
                     {/* Controls */}
                     <div className="flex space-x-4 mt-8">

@@ -169,6 +169,80 @@ export const useMotionGame = (config, onComplete, onTermination) => {
         loadNewPuzzle(level);
     };
 
+    // Constraint Logic for Drag
+    const calculateConstraints = useCallback((itemId) => {
+        const item = items.find(i => i.id === itemId);
+        if (!item) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+        // 1. Horizontal Constraints
+        let minX = 0;
+        let maxX = GRID_WIDTH - item.w;
+
+        // Check against other items for X
+        items.forEach(other => {
+            if (other.id === itemId) return;
+            // If overlapping in Y, then it constrains X
+            if (other.y < item.y + item.h && other.y + other.h > item.y) {
+                if (other.x + other.w <= item.x) {
+                    minX = Math.max(minX, other.x + other.w);
+                }
+                if (other.x >= item.x + item.w) {
+                    maxX = Math.min(maxX, other.x - item.w);
+                }
+            }
+        });
+
+        // 2. Vertical Constraints
+        let minY = 0;
+        let maxY = GRID_HEIGHT - item.h;
+
+        items.forEach(other => {
+            if (other.id === itemId) return;
+            // If overlapping in X, then it constrains Y
+            if (other.x < item.x + item.w && other.x + other.w > item.x) {
+                if (other.y + other.h <= item.y) {
+                    minY = Math.max(minY, other.y + other.h);
+                }
+                if (other.y >= item.y + item.h) {
+                    maxY = Math.min(maxY, other.y - item.h);
+                }
+            }
+        });
+
+        return { minX, maxX, minY, maxY };
+    }, [items]);
+
+    const moveItemTo = useCallback((itemId, newX, newY) => {
+        if (isAnimating || timeLeft <= 0) return;
+
+        setItems(prevItems => {
+            const idx = prevItems.findIndex(i => i.id === itemId);
+            if (idx === -1) return prevItems;
+
+            const item = prevItems[idx];
+            // If no change, return
+            if (item.x === newX && item.y === newY) return prevItems;
+
+            const newItem = { ...item, x: newX, y: newY };
+
+            // Check Win
+            if (newItem.type === ItemTypes.TARGET && newX === exitPos.x && newY === exitPos.y) {
+                setTimeout(() => handlePuzzleSolved(), 300);
+            }
+
+            const newArr = [...prevItems];
+            newArr[idx] = newItem;
+
+            // Increment move count
+            metricsRef.current.totalAttempts++;
+            return newArr;
+        });
+
+        setMoves(m => m + 1);
+        setTotalMoves(tm => tm + 1);
+    }, [isAnimating, timeLeft, exitPos]);
+
+
     return {
         items,
         exitPos,
@@ -176,7 +250,9 @@ export const useMotionGame = (config, onComplete, onTermination) => {
         moves,
         puzzlesSolved,
         level,
-        moveItem,
+        moveItem, // Keep old one just in case? Or remove? keeping for safety
+        moveItemTo,
+        calculateConstraints,
         skipPuzzle
     };
 };
