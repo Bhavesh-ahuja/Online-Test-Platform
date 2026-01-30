@@ -15,6 +15,7 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
     const {
         items,
         exitPos,
+        gridSize, // <--- New prop
         timeLeft,
         moves,
         puzzlesSolved,
@@ -43,6 +44,7 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
             <div className="h-16 border-b border-gray-700 flex items-center justify-between px-6 bg-gray-800">
                 <div className="flex items-center space-x-4">
                     <span className="text-gray-400 font-mono text-sm">Motion Challenge</span>
+                    <span className="text-xs text-gray-400 px-2 py-1 bg-gray-700 rounded-lg">Level {level}</span>
                 </div>
                 <div className="flex items-center space-x-8">
                     <div className="flex flex-col items-end">
@@ -75,6 +77,7 @@ const GameContent = ({ testConfig, examSession, onFinish, navigate }) => {
                         onMoveTo={moveItemTo}
                         getConstraints={calculateConstraints}
                         exitPos={exitPos}
+                        gridSize={gridSize} // <--- Passing it
                     />
 
                     {/* Controls */}

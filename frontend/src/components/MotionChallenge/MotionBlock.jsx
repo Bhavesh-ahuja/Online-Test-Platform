@@ -1,14 +1,12 @@
 import React from 'react';
 
-const MotionBlock = ({ item, isDragging, onDragStart, style = {} }) => {
-    // Grid Setup
-    const widthPct = (item.w / 4) * 100;
-    const heightPct = (item.h / 6) * 100;
+const MotionBlock = ({ item, isDragging, onDragStart, gridSize = { w: 4, h: 6 }, style = {} }) => {
+    // Grid Dynamic
+    const widthPct = (item.w / gridSize.w) * 100;
+    const heightPct = (item.h / gridSize.h) * 100;
 
-    // If dragging, X/Y are handled by the parent style or transform
-    // If not, we calculate from grid
-    const leftPct = (item.x / 4) * 100;
-    const topPct = (item.y / 6) * 100;
+    const leftPct = (item.x / gridSize.w) * 100;
+    const topPct = (item.y / gridSize.h) * 100;
 
     // Type Styling
     let bgColor = item.color || 'blue';
@@ -19,7 +17,7 @@ const MotionBlock = ({ item, isDragging, onDragStart, style = {} }) => {
         borderRadius = '50%';
         bgColor = 'radial-gradient(circle at 30% 30%, #ff5555, #990000)';
     } else if (item.type === 3) { // Wall
-        bgColor = '#4b5563'; // Gray-600
+        bgColor = '#4b5563';
         borderRadius = '4px';
         border = '2px solid #374151';
     } else {
@@ -32,24 +30,21 @@ const MotionBlock = ({ item, isDragging, onDragStart, style = {} }) => {
         width: `${widthPct}%`,
         height: `${heightPct}%`,
         boxSizing: 'border-box',
-        padding: '12px', // Gap
+        padding: '12px',
         transition: isDragging ? 'none' : 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)',
         zIndex: isDragging ? 20 : (item.type === 1 ? 10 : 5),
         cursor: item.type === 3 ? 'default' : (isDragging ? 'grabbing' : 'grab'),
         touchAction: 'none',
-        ...style // Allow overrides
+        ...style
     };
 
-    // If NOT dragging, position is grid-based
     if (!style.left && !style.transform) {
         baseStyle.left = `${leftPct}%`;
         baseStyle.top = `${topPct}%`;
     }
 
     const handlePointerDown = (e) => {
-        if (item.type === 3) return; // Wall
-        // Stop bubbling so grid doesn't get it?
-        // e.preventDefault(); 
+        if (item.type === 3) return;
         onDragStart(e, item.id);
     };
 
@@ -57,8 +52,6 @@ const MotionBlock = ({ item, isDragging, onDragStart, style = {} }) => {
         <div
             style={baseStyle}
             onPointerDown={handlePointerDown}
-        // Add mouse listeners just in case pointer events aren't fully polyfilled in environment, 
-        // but Pointer Events are standard now.
         >
             <div style={{
                 width: '100%',

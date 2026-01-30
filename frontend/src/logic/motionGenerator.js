@@ -1,15 +1,16 @@
 /**
  * motionGenerator.js
  * 
- * Logic for generating solvability-guaranteed Motion Challenge puzzles on a 4x6 grid.
- * Uses a Reverse Search or Random+Solve approach.
- * 
- * Grid: 4 (width) x 6 (height)
- * Coordinates: x (0..3), y (0..5)
+ * Logic for generating solvability-guaranteed Motion Challenge puzzles on dynamic grids.
+ * Support 3x5, 4x6, 5x7 based on difficulty.
  */
 
-const GRID_WIDTH = 4;
-const GRID_HEIGHT = 6;
+// Grid Dimensions are now dynamic based on difficulty
+const getGridConfig = (difficulty) => {
+    if (difficulty <= 2) return { w: 3, h: 5 }; // Easy
+    if (difficulty <= 5) return { w: 4, h: 6 }; // Medium
+    return { w: 5, h: 7 }; // Hard
+};
 
 export const ItemTypes = {
     EMPTY: 0,
@@ -21,7 +22,6 @@ export const ItemTypes = {
 // Utils
 const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-// Check if a rect overlaps with any existing items
 const isOverlap = (item, items) => {
     return items.some(existing => {
         return (
@@ -33,28 +33,7 @@ const isOverlap = (item, items) => {
     });
 };
 
-const isOutOfBounds = (item) => {
-    return (
-        item.x < 0 || item.y < 0 ||
-        item.x + item.w > GRID_WIDTH ||
-        item.y + item.h > GRID_HEIGHT
-    );
-};
-
-const serializeState = (items) => {
-    // Sort items by ID for canonical state
-    const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
-    return JSON.stringify(sorted.map(i => ({ id: i.id, x: i.x, y: i.y })));
-};
-
-const covers = (item, pos) => {
-    return (
-        pos.x >= item.x && pos.x < item.x + item.w &&
-        pos.y >= item.y && pos.y < item.y + item.h
-    );
-};
-
-const getSlideDistance = (item, dir, allItems) => {
+const getSlideDistance = (item, dir, allItems, gridW, gridH) => {
     let dist = 0;
     let currX = item.x;
     let currY = item.y;
@@ -64,7 +43,7 @@ const getSlideDistance = (item, dir, allItems) => {
         const nextY = currY + dir.dy;
 
         // 1. Boundary Check
-        if (nextX < 0 || nextY < 0 || nextX + item.w > GRID_WIDTH || nextY + item.h > GRID_HEIGHT) {
+        if (nextX < 0 || nextY < 0 || nextX + item.w > gridW || nextY + item.h > gridH) {
             break;
         }
 
@@ -85,7 +64,7 @@ const getSlideDistance = (item, dir, allItems) => {
     return dist;
 };
 
-const getValidMoves = (items) => {
+const getValidMoves = (items, gridW, gridH) => {
     const validMoves = [];
     const directions = [
         { dx: 0, dy: -1, dir: 'UP' },
@@ -98,7 +77,7 @@ const getValidMoves = (items) => {
         if (item.type === ItemTypes.WALL) return;
 
         directions.forEach(d => {
-            const dist = getSlideDistance(item, d, items);
+            const dist = getSlideDistance(item, d, items, gridW, gridH);
             if (dist > 0) {
                 validMoves.push({
                     itemId: item.id,
@@ -124,9 +103,13 @@ const applyMove = (items, move) => {
     });
 };
 
-// BFS Solver to check solvability
-const solvePuzzle = (initialItems, exitPos) => {
-    // Only movable items matter for state
+const serializeState = (items) => {
+    const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
+    return JSON.stringify(sorted.map(i => ({ id: i.id, x: i.x, y: i.y })));
+};
+
+// BFS Solver
+const solvePuzzle = (initialItems, exitPos, gridW, gridH) => {
     const queue = [{ items: initialItems, moves: 0, path: [] }];
     const visited = new Set();
     visited.add(serializeState(initialItems));
@@ -136,17 +119,14 @@ const solvePuzzle = (initialItems, exitPos) => {
 
     while (head < queue.length) {
         const current = queue[head++];
-
         if (current.moves > MAX_DEPTH) continue;
 
-        // Check win
         const target = current.items.find(i => i.type === ItemTypes.TARGET);
         if (target.x === exitPos.x && target.y === exitPos.y) {
             return current.path;
         }
 
-        // Generate moves
-        const moves = getValidMoves(current.items);
+        const moves = getValidMoves(current.items, gridW, gridH);
 
         for (const move of moves) {
             const nextItems = applyMove(current.items, move);
@@ -160,15 +140,13 @@ const solvePuzzle = (initialItems, exitPos) => {
                 });
             }
         }
-
         if (queue.length > 20000) return null;
     }
     return null;
 };
 
-const generateRandomLayout = (difficulty, exitPos) => {
-    // Cap blocks at 6 for 4x6 grid.
-    const numBlocks = Math.min(3 + Math.floor(difficulty / 2), 6);
+const generateRandomLayout = (difficulty, exitPos, gridW, gridH) => {
+    const numBlocks = Math.min(3 + Math.floor(difficulty / 2), 8);
     const numWalls = difficulty > 4 ? (Math.random() > 0.8 ? 1 : 0) : 0;
     const suffix = Math.random().toString(36).substring(7);
 
@@ -179,9 +157,8 @@ const generateRandomLayout = (difficulty, exitPos) => {
     while (!targetPlaced) {
         const t = {
             id: `target-${suffix}`, type: ItemTypes.TARGET,
-
-            x: getRandomInt(0, GRID_WIDTH - 1),
-            y: getRandomInt(0, 3),
+            x: getRandomInt(0, gridW - 1),
+            y: getRandomInt(0, Math.floor(gridH / 2)),
             w: 1, h: 1, color: 'red'
         };
         if (t.x !== exitPos.x || t.y !== exitPos.y) {
@@ -197,8 +174,8 @@ const generateRandomLayout = (difficulty, exitPos) => {
         while (!placed && attempts < 50) {
             const wall = {
                 id: `wall-${i}-${suffix}`, type: ItemTypes.WALL,
-                x: getRandomInt(0, GRID_WIDTH - 1),
-                y: getRandomInt(0, GRID_HEIGHT - 1),
+                x: getRandomInt(0, gridW - 1),
+                y: getRandomInt(0, gridH - 1),
                 w: 1, h: 1, color: 'grey'
             };
             if (!isOverlap(wall, items) && (wall.x !== exitPos.x || wall.y !== exitPos.y)) {
@@ -209,25 +186,32 @@ const generateRandomLayout = (difficulty, exitPos) => {
         }
     }
 
-    // 3. Place Blocks
+    // 3. Place Blocks with Variety
     for (let i = 0; i < numBlocks; i++) {
         let placed = false;
         let attempts = 0;
         while (!placed && attempts < 50) {
-            const isVertical = Math.random() > 0.6;
-            const w = isVertical ? 1 : 2;
-            const h = isVertical ? 2 : 1;
+            // New Block Types: 1x1, 1x2, 2x1, 2x2
+            const rand = Math.random();
+            let w = 1, h = 1;
+
+            if (rand < 0.2) { w = 1; h = 1; } // Small
+            else if (rand < 0.5) { w = 1; h = 2; } // Vertical
+            else if (rand < 0.8) { w = 2; h = 1; } // Horizontal
+            else { w = 2; h = 2; } // Big Square
+
+            // Cap size if grid is small
+            if (gridW < 4 && w > 1) w = 1;
 
             const block = {
                 id: `block-${i}-${suffix}`, type: ItemTypes.BLOCK,
-                x: getRandomInt(0, GRID_WIDTH - w),
-                y: getRandomInt(0, GRID_HEIGHT - h),
+                x: getRandomInt(0, gridW - w),
+                y: getRandomInt(0, gridH - h),
                 w, h,
-                // Random colors
                 color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'][getRandomInt(0, 4)]
             };
 
-            if (!isOverlap(block, items)) {
+            if (!isOverlap(block, items) && (block.x !== exitPos.x || block.y !== exitPos.y)) {
                 items.push(block);
                 placed = true;
             }
@@ -237,12 +221,23 @@ const generateRandomLayout = (difficulty, exitPos) => {
     return items;
 };
 
-// Randomized Fallback that is guaranteed to change
-const generateSimpleFallback = (exitPos) => {
+const getRandomExitPos = (w, h) => {
+    const perimeter = [];
+    for (let x = 0; x < w; x++) {
+        perimeter.push({ x, y: 0 });
+        perimeter.push({ x, y: h - 1 });
+    }
+    for (let y = 1; y < h - 1; y++) {
+        perimeter.push({ x: 0, y });
+        perimeter.push({ x: w - 1, y });
+    }
+    return perimeter[getRandomInt(0, perimeter.length - 1)];
+};
+
+const generateSimpleFallback = (exitPos, gridW, gridH) => {
     const suffix = Date.now() + '-' + Math.random().toString(36).substring(7);
     const items = [];
 
-    // 1. Place Target randomly in top-left quadrant
     const target = {
         id: `target-${suffix}`, type: ItemTypes.TARGET,
         x: getRandomInt(0, 1),
@@ -251,18 +246,16 @@ const generateSimpleFallback = (exitPos) => {
     };
     items.push(target);
 
-    // 2. Place 3 small random blocks in safe spots
     for (let i = 0; i < 3; i++) {
         let placed = false;
         let attempts = 0;
         while (!placed && attempts < 100) {
             const block = {
                 id: `fallback-${i}-${suffix}`, type: ItemTypes.BLOCK,
-                x: getRandomInt(0, GRID_WIDTH - 1),
-                y: getRandomInt(0, GRID_HEIGHT - 1),
+                x: getRandomInt(0, gridW - 1),
+                y: getRandomInt(0, gridH - 1),
                 w: 1, h: 1, color: 'blue'
             };
-            // Ensure no overlap and not blocking exit directly (simple heuristic)
             if (!isOverlap(block, items) && (block.x !== exitPos.x || block.y !== exitPos.y)) {
                 items.push(block);
                 placed = true;
@@ -271,51 +264,32 @@ const generateSimpleFallback = (exitPos) => {
         }
     }
 
-    return { items, minMoves: 1, exitPos };
+    return { items, minMoves: 1, exitPos, gridSize: { w: gridW, h: gridH } };
 };
 
 const refineBoardUntilSolvable = (difficulty) => {
+    const config = getGridConfig(difficulty);
     const MAX_ATTEMPTS = 500;
 
-    // Try to generate at requested difficulty
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
-        const exitPos = getRandomExitPos(); // Dynamic Exit per attempt
-        const newItems = generateRandomLayout(difficulty, exitPos);
-        const solution = solvePuzzle(newItems, exitPos);
+        const exitPos = getRandomExitPos(config.w, config.h);
+        const newItems = generateRandomLayout(difficulty, exitPos, config.w, config.h);
+        const solution = solvePuzzle(newItems, exitPos, config.w, config.h);
 
         const minMovesReq = Math.min(difficulty + 1, 8);
         if (solution && solution.length >= minMovesReq) {
-            return { items: newItems, minMoves: solution.length, exitPos };
+            return { items: newItems, minMoves: solution.length, exitPos, gridSize: config };
         }
     }
 
-    // Recursive Fallback
     if (difficulty > 1) {
         return refineBoardUntilSolvable(difficulty - 1);
     }
 
-    // Final Fallback
-    const exitPos = getRandomExitPos();
-    return generateSimpleFallback(exitPos);
+    const exitPos = getRandomExitPos(config.w, config.h);
+    return generateSimpleFallback(exitPos, config.w, config.h);
 };
 
-// Pick a random spot on the perimeter
-const getRandomExitPos = () => {
-    const perimeter = [];
-    // Top and Bottom rows
-    for (let x = 0; x < GRID_WIDTH; x++) {
-        perimeter.push({ x, y: 0 });
-        perimeter.push({ x, y: GRID_HEIGHT - 1 });
-    }
-    // Left and Right cols (excluding corners already added? Set handles uniqueness or just careful loop)
-    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
-        perimeter.push({ x: 0, y });
-        perimeter.push({ x: GRID_WIDTH - 1, y });
-    }
-    return perimeter[getRandomInt(0, perimeter.length - 1)];
-};
-
-// Generate a random valid puzzle
 export const generatePuzzle = (difficultyLevel = 1) => {
     return refineBoardUntilSolvable(difficultyLevel);
 };

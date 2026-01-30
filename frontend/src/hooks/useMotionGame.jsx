@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generatePuzzle, ItemTypes } from '../logic/motionGenerator';
 
-const GRID_WIDTH = 4;
-const GRID_HEIGHT = 6;
-
 export const useMotionGame = (config, onComplete, onTermination) => {
     const [level, setLevel] = useState(1);
     const [items, setItems] = useState([]);
     const [exitPos, setExitPos] = useState({ x: 3, y: 5 });
+    const [gridSize, setGridSize] = useState({ w: 4, h: 6 }); // Default
+
     const [score, setScore] = useState(0);
     const [puzzlesSolved, setPuzzlesSolved] = useState(0);
     const [moves, setMoves] = useState(0);
@@ -17,7 +16,7 @@ export const useMotionGame = (config, onComplete, onTermination) => {
 
     // Metrics
     const metricsRef = useRef({
-        totalAttempts: 0, // total moves
+        totalAttempts: 0,
         puzzlesPlaying: 0,
         moveHistory: [],
         puzzleStartTimes: [],
@@ -46,11 +45,10 @@ export const useMotionGame = (config, onComplete, onTermination) => {
     }, []);
 
     const loadNewPuzzle = (lvl) => {
-        const { items: newItems, exitPos: newExit } = generatePuzzle(lvl);
+        const { items: newItems, exitPos: newExit, gridSize: newGrid } = generatePuzzle(lvl);
         setItems(newItems);
-        if (newExit) {
-            setExitPos(newExit);
-        }
+        if (newExit) setExitPos(newExit);
+        if (newGrid) setGridSize(newGrid);
         setMoves(0);
     };
 
@@ -62,99 +60,81 @@ export const useMotionGame = (config, onComplete, onTermination) => {
                     reason: 'TIMEOUT',
                     totalAttempts: metricsRef.current.totalAttempts,
                     puzzlesSolved: metricsRef.current.puzzlesSolved,
-                    // ...metricsRef.current
                 }
             });
         }
     };
 
     const calculateScore = () => {
-        // Simple scoring
         return metricsRef.current.puzzlesSolved * 100 + (totalMoves * 1);
     };
 
-    // Movement Logic
-    const moveItem = useCallback((itemId, direction) => {
+    const calculateConstraints = useCallback((itemId) => {
+        const item = items.find(i => i.id === itemId);
+        if (!item) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+        // 1. Horizontal Constraints
+        let minX = 0;
+        let maxX = gridSize.w - item.w;
+
+        // Check against other items for X
+        items.forEach(other => {
+            if (other.id === itemId) return;
+            if (other.y < item.y + item.h && other.y + other.h > item.y) {
+                if (other.x + other.w <= item.x) {
+                    minX = Math.max(minX, other.x + other.w);
+                }
+                if (other.x >= item.x + item.w) {
+                    maxX = Math.min(maxX, other.x - item.w);
+                }
+            }
+        });
+
+        // 2. Vertical Constraints
+        let minY = 0;
+        let maxY = gridSize.h - item.h;
+
+        items.forEach(other => {
+            if (other.id === itemId) return;
+            if (other.x < item.x + item.w && other.x + other.w > item.x) {
+                if (other.y + other.h <= item.y) {
+                    minY = Math.max(minY, other.y + other.h);
+                }
+                if (other.y >= item.y + item.h) {
+                    maxY = Math.min(maxY, other.y - item.h);
+                }
+            }
+        });
+
+        return { minX, maxX, minY, maxY };
+    }, [items, gridSize]);
+
+    const moveItemTo = useCallback((itemId, newX, newY) => {
         if (isAnimating || timeLeft <= 0) return;
 
         setItems(prevItems => {
-            const itemIndex = prevItems.findIndex(i => i.id === itemId);
-            if (itemIndex === -1) return prevItems;
+            const idx = prevItems.findIndex(i => i.id === itemId);
+            if (idx === -1) return prevItems;
 
-            const item = prevItems[itemIndex];
+            const item = prevItems[idx];
+            if (item.x === newX && item.y === newY) return prevItems;
 
-            // Fix: Prevent moving WALL items
-            if (item.type === ItemTypes.WALL) return prevItems;
+            const newItem = { ...item, x: newX, y: newY };
 
-            // Calculate Slide
-            let dx = 0, dy = 0;
-            if (direction === 'UP') dy = -1;
-            if (direction === 'DOWN') dy = 1;
-            if (direction === 'LEFT') dx = -1;
-            if (direction === 'RIGHT') dx = 1;
-
-            let dist = 0;
-            let finalX = item.x;
-            let finalY = item.y;
-
-            // Simulation loop
-            while (true) {
-                const nextX = finalX + dx;
-                const nextY = finalY + dy;
-
-                if (nextX < 0 || nextY < 0 || nextX + item.w > GRID_WIDTH || nextY + item.h > GRID_HEIGHT) {
-                    break;
-                }
-
-                // Check collision
-                const testRect = { ...item, x: nextX, y: nextY };
-                const collision = prevItems.some(other => {
-                    if (other.id === itemId) return false;
-                    return (
-                        testRect.x < other.x + other.w &&
-                        testRect.x + testRect.w > other.x &&
-                        testRect.y < other.y + other.h &&
-                        testRect.y + testRect.h > other.y
-                    );
-                });
-
-                if (collision) break;
-
-                finalX = nextX;
-                finalY = nextY;
-                dist++;
+            // Check Win
+            if (newItem.type === ItemTypes.TARGET && newX === exitPos.x && newY === exitPos.y) {
+                setTimeout(() => handlePuzzleSolved(), 300);
             }
 
-            if (dist > 0) {
-                // Apply update
-                const newItems = [...prevItems];
-                newItems[itemIndex] = { ...item, x: finalX, y: finalY };
+            const newArr = [...prevItems];
+            newArr[idx] = newItem;
 
-                // Update stats
-                setTimeout(() => {
-                    // Update external state in a safe way if needed
-                }, 0);
-
-                // Track metrics
-                metricsRef.current.totalAttempts++;
-
-                // Check Win Condition (Target reached Dynamic Exit)
-                if (item.type === ItemTypes.TARGET && finalX === exitPos.x && finalY === exitPos.y) {
-                    // Puzzle Solved!
-                    // Trigger async to avoid state clash
-                    setTimeout(() => handlePuzzleSolved(), 300);
-                }
-
-                return newItems;
-            }
-
-            return prevItems;
+            metricsRef.current.totalAttempts++;
+            return newArr;
         });
 
-        // Update Moves Counter (Reactive)
         setMoves(m => m + 1);
         setTotalMoves(tm => tm + 1);
-
     }, [isAnimating, timeLeft, exitPos]);
 
     const handlePuzzleSolved = () => {
@@ -169,88 +149,14 @@ export const useMotionGame = (config, onComplete, onTermination) => {
         loadNewPuzzle(level);
     };
 
-    // Constraint Logic for Drag
-    const calculateConstraints = useCallback((itemId) => {
-        const item = items.find(i => i.id === itemId);
-        if (!item) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-
-        // 1. Horizontal Constraints
-        let minX = 0;
-        let maxX = GRID_WIDTH - item.w;
-
-        // Check against other items for X
-        items.forEach(other => {
-            if (other.id === itemId) return;
-            // If overlapping in Y, then it constrains X
-            if (other.y < item.y + item.h && other.y + other.h > item.y) {
-                if (other.x + other.w <= item.x) {
-                    minX = Math.max(minX, other.x + other.w);
-                }
-                if (other.x >= item.x + item.w) {
-                    maxX = Math.min(maxX, other.x - item.w);
-                }
-            }
-        });
-
-        // 2. Vertical Constraints
-        let minY = 0;
-        let maxY = GRID_HEIGHT - item.h;
-
-        items.forEach(other => {
-            if (other.id === itemId) return;
-            // If overlapping in X, then it constrains Y
-            if (other.x < item.x + item.w && other.x + other.w > item.x) {
-                if (other.y + other.h <= item.y) {
-                    minY = Math.max(minY, other.y + other.h);
-                }
-                if (other.y >= item.y + item.h) {
-                    maxY = Math.min(maxY, other.y - item.h);
-                }
-            }
-        });
-
-        return { minX, maxX, minY, maxY };
-    }, [items]);
-
-    const moveItemTo = useCallback((itemId, newX, newY) => {
-        if (isAnimating || timeLeft <= 0) return;
-
-        setItems(prevItems => {
-            const idx = prevItems.findIndex(i => i.id === itemId);
-            if (idx === -1) return prevItems;
-
-            const item = prevItems[idx];
-            // If no change, return
-            if (item.x === newX && item.y === newY) return prevItems;
-
-            const newItem = { ...item, x: newX, y: newY };
-
-            // Check Win
-            if (newItem.type === ItemTypes.TARGET && newX === exitPos.x && newY === exitPos.y) {
-                setTimeout(() => handlePuzzleSolved(), 300);
-            }
-
-            const newArr = [...prevItems];
-            newArr[idx] = newItem;
-
-            // Increment move count
-            metricsRef.current.totalAttempts++;
-            return newArr;
-        });
-
-        setMoves(m => m + 1);
-        setTotalMoves(tm => tm + 1);
-    }, [isAnimating, timeLeft, exitPos]);
-
-
     return {
         items,
         exitPos,
+        gridSize,
         timeLeft,
         moves,
         puzzlesSolved,
         level,
-        moveItem, // Keep old one just in case? Or remove? keeping for safety
         moveItemTo,
         calculateConstraints,
         skipPuzzle
