@@ -77,6 +77,9 @@ const Navbar = () => {
   // ----------------------------------------------------------------
   // 3. THE MERGED UI
   // ----------------------------------------------------------------
+
+  const isAdmin = user?.role === "ADMIN";
+
   return (
     <div
       ref={navContainerRef}
@@ -87,9 +90,11 @@ const Navbar = () => {
 
           {/* --- LEFT SIDE: LOGO --- */}
           <div className="flex items-center gap-7">
-            <Link to="/">
+            {/* <Link to="/"> */}
+            {/* Logo Link Check */}
+            <Link to={isAdmin ? "/" : "/dashboard"}></Link>
               <img src="/img/logo.png" alt="logo" className="w-10" />
-            </Link>
+            {/* </Link> */}
 
             {/* Optional: Kept your decorative Product button */}
             {/* <Button
@@ -106,9 +111,12 @@ const Navbar = () => {
             {/* 1. DYNAMIC NAV LINKS (Team's Logic + Your Style) */}
             <div className="hidden md:block">
               {/* Common Link */}
+              {/* Home Link - Admin Only */}
+              {isAdmin && (
               <Link to="/" className="nav-hover-btn">
                 Home
               </Link>
+              )}
 
               {/* Conditional Links based on Login Status */}
               {token ? (
@@ -117,9 +125,11 @@ const Navbar = () => {
                     Dashboard
                   </Link>
 
-                  <Link to="/my-results" className="nav-hover-btn">
-                    My Results
-                  </Link>
+                  {isAdmin && (
+                    <Link to="/my-results" className="nav-hover-btn">
+                      My Results
+                    </Link>
+                  )}
 
                   {/* Admin Only Link */}
                   {user.role === "ADMIN" && (
@@ -128,9 +138,11 @@ const Navbar = () => {
                     </Link>
                   )}
 
-                  <Link to="/profile" className="nav-hover-btn">
-                    Profile
-                  </Link>
+                  {isAdmin && (
+                    <Link to="/profile" className="nav-hover-btn">
+                      Profile
+                    </Link>
+                  )}
 
                   {/* Logout Button (Styled like a link) */}
                   <button onClick={handleLogout} className="nav-hover-btn">
